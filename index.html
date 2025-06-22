@@ -526,7 +526,7 @@
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2" for="description">Description</label>
-                            <textarea id="description" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-32 resize-y" required></textarea>
+                            <textarea id="description" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-32 resize-y"></textarea>
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2" for="category">Category</label>
@@ -808,9 +808,9 @@
             // NEW: Join the Socket.IO room for this order
             if (socket && socket.connected) {
                 socket.emit('join_order_room', { order_id: selectedOrder.id });
-                console.log(`Frontend joined order room: ${selectedOrder.id}`);
+                console.log(`Frontend: Client joined order room: ${selectedOrder.id}`); // Added more specific log
             } else {
-                console.warn("Socket.IO not connected, messages might not be real-time.");
+                console.warn("Frontend: Socket.IO not connected, messages might not be real-time.");
                 // Optionally, try to reconnect or show a message
             }
 
@@ -826,6 +826,7 @@
                             displayNewMessageInChat(msg);
                         });
                     }
+                    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom after loading history
                 } catch (error) {
                     chatMessagesContainer.innerHTML = `<p class="text-center text-red-500">Failed to load messages: ${error.message}</p>`;
                 }
@@ -960,14 +961,16 @@
         function displayNewMessageInChat(message) {
             const chatMessagesContainer = document.getElementById('chat-messages-container');
             if (!chatMessagesContainer) {
-                console.error("Chat messages container not found!");
+                console.error("Frontend: Chat messages container not found!"); // Added more specific log
                 return;
             }
+
+            console.log("Frontend: Displaying new message in chat:", message); // Added more specific log
 
             const messageElement = document.createElement('div');
             // Add class based on who sent the message for different styling (e.g., right vs left)
             messageElement.classList.add('message-item');
-            if (message.sender_id === currentUser.user_id) {
+            if (currentUser && message.sender_id === currentUser.user_id) { // Added currentUser check
                 messageElement.classList.add('sent-by-me');
             }
 
@@ -976,11 +979,12 @@
             try {
                 sentTime = new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             } catch (e) {
+                console.warn("Frontend: Could not parse message.sent_at:", message.sent_at, e); // Warn on parse error
                 sentTime = ''; // Fallback if date parsing fails
             }
 
             messageElement.innerHTML = `
-                <div class="font-semibold text-sm mb-1">${message.sender_id === currentUser.user_id ? 'You' : `User ${message.sender_id}`} <span class="text-gray-500 text-xs">${sentTime}</span></div>
+                <div class="font-semibold text-sm mb-1">${currentUser && message.sender_id === currentUser.user_id ? 'You' : `User ${message.sender_id}`} <span class="text-gray-500 text-xs">${sentTime}</span></div>
                 <p class="text-gray-800">${message.message}</p>
             `;
             
@@ -1002,18 +1006,43 @@
 
             // NEW: Initialize Socket.IO connection when DOM is ready
             // The socket object is already declared globally at the top
-            socket = io(SOCKET_IO_SERVER_URL);
+            // If you are getting 'websocket error' or 'xhr poll error', the primary issue is likely
+            // your backend's Gunicorn configuration (it needs --worker-class eventlet)
+            // and potentially a missing or misconfigured REDIS_URL environment variable on Render.com.
+            // These options are already included for robustness, but the server must support the connection.
+            socket = io(SOCKET_IO_SERVER_URL, {
+                transports: ['websocket', 'polling'], // Explicitly prefer websocket, then polling
+                withCredentials: true, // Important for CORS and session/cookie handling if any
+                forceNew: true, // Force a new connection instead of reusing a cached one
+                // Optional: If you suspect a version mismatch with an older Flask-SocketIO, you might try:
+                // allowEIO3: true,
+            });
 
-            socket.on('connect', () => {
-                console.log('Frontend: Connected to WebSocket server');
-                // If we are already in a messages view when connected, join the room
-                if (currentView === 'messages' && selectedOrder && selectedOrder.id) {
-                    socket.emit('join_order_room', { order_id: selectedOrder.id });
+            // Added connect_error listener for debugging
+            socket.on('connect_error', (error) => {
+                console.error("Frontend: Socket.IO Connection Error:", error);
+                // More specific messages based on the error type
+                if (error.message.includes('websocket error') || error.message.includes('xhr poll error')) {
+                    showMessage(`WebSocket connection failed. This usually means the backend Socket.IO server is not reachable or incorrectly configured. Please verify your backend's Gunicorn start command on Render.com (--worker-class eventlet) and ensure any required Redis service (REDIS_URL) is properly set up.`, 'error');
+                } else if (error.message.includes('timeout')) {
+                     showMessage(`WebSocket connection timed out. The backend server might be slow to respond or unreachable.`, 'error');
+                }
+                else {
+                    showMessage(`WebSocket connection error: ${error.message}. Real-time features may not work.`, 'error');
                 }
             });
 
-            socket.on('disconnect', () => {
-                console.log('Frontend: Disconnected from WebSocket server');
+            socket.on('connect', () => {
+                console.log('Frontend: Connected to WebSocket server. Socket ID:', socket.id); // Log socket ID
+                // If we are already in a messages view when connected, join the room
+                if (currentView === 'messages' && selectedOrder && selectedOrder.id) {
+                    socket.emit('join_order_room', { order_id: selectedOrder.id });
+                    console.log(`Frontend: Attempting to join order room: ${selectedOrder.id}`); // More specific log
+                }
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('Frontend: Disconnected from WebSocket server. Reason:', reason); // Log disconnect reason
             });
 
             socket.on('status', (data) => {
@@ -1025,15 +1054,16 @@
                 // Only display if the message belongs to the currently viewed order
                 if (selectedOrder && message.order_id === selectedOrder.id) {
                     displayNewMessageInChat(message);
+                } else {
+                    console.log('Frontend: Message received for another order or no order selected.');
                 }
             });
 
-            // NEW: Add a 'leave_order_room' event handler on the frontend as well
+            // NEW: Add a 'leave_order_room_ack' event handler on the frontend as well
             // This is for when the user navigates away from the messages view.
             socket.on('leave_order_room_ack', (data) => {
                 console.log('Frontend: Left order room:', data.order_id);
             });
-
         });
     </script>
 </body>
