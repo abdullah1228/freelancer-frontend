@@ -173,7 +173,7 @@
                 return data;
             } catch (error) {
                 console.error(`API Error on ${endpoint}:`, error);
-                showMessage(`Error: ${error.message}. Make sure your backend is running.`, 'error');
+                showMessage(`Error: ${error.message}.`, 'error');
                 throw error; // Re-throw to be caught by specific view handlers
             } finally {
                 showLoading(false);
