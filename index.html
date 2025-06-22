@@ -6,8 +6,6 @@
     <title>Freelancerrr - Simple Frontend</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- NEW: Include Socket.IO Client Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -98,43 +96,6 @@
         .glow-button.bg-yellow-600:hover {
             box-shadow: 0 0 15px rgba(250, 204, 21, 0.7); /* Yellow glow */
         }
-
-        /* Specific styles for messages view */
-        #messages-content-area {
-            display: flex;
-            flex-direction: column;
-            height: 100%; /* Make messages section fill available height */
-        }
-        #chat-messages-container {
-            flex-grow: 1; /* Allow chat messages to take up available space */
-            overflow-y: auto; /* Enable scrolling for messages */
-            padding: 1rem;
-            background-color: #f8fafc; /* Light grey background for chat */
-            border-radius: 0.75rem;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 1rem;
-            display: flex; /* Make it a flex container for messages */
-            flex-direction: column; /* Stack messages vertically */
-            max-height: 500px; /* Limit height for message history */
-        }
-        .message-item {
-            background-color: #fff;
-            padding: 0.75rem 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            max-width: 90%;
-            align-self: flex-start; /* Default for general messages */
-            word-wrap: break-word; /* Ensure long words wrap */
-            overflow-wrap: break-word; /* Ensure long words wrap */
-        }
-        .message-item.sent-by-me {
-            background-color: #e0f2f7; /* Light blue for messages sent by current user */
-            align-self: flex-end; /* Align to the right */
-        }
-        .message-item strong {
-            color: #4a5568; /* Darker grey for sender name/time */
-        }
     </style>
 </head>
 <body>
@@ -162,17 +123,11 @@
     <script>
         // IMPORTANT: Replace with the actual URL where your Flask backend is running.
         const API_BASE_URL = 'https://freelancer-backend-rahz.onrender.com/api';
-        // NEW: Base URL for WebSocket connection (should be your backend's root URL)
-        const SOCKET_IO_SERVER_URL = 'https://freelancer-backend-rahz.onrender.com';
-
 
         let currentUser = null; // Stores logged-in user data
         let currentView = 'auth'; // 'auth', 'dashboard', 'createGig', 'gigList', 'gigDetail', 'myOrders', 'messages', 'reviews'
         let selectedGig = null; // For gigDetail view
         let selectedOrder = null; // For messages/reviews view
-
-        // NEW: Socket.IO client instance
-        let socket = null;
 
         // --- Utility Functions ---
 
@@ -228,12 +183,6 @@
         // --- Navigation and View Rendering ---
 
         function navigateTo(view, data = null) {
-            // NEW: If changing view from messages, disconnect from Socket.IO room
-            if (currentView === 'messages' && socket && selectedOrder) {
-                socket.emit('leave_order_room', { order_id: selectedOrder.id }); // Assuming you add this backend event handler
-                console.log(`Left order room: ${selectedOrder.id}`);
-            }
-
             currentView = view;
             selectedGig = null;
             selectedOrder = null;
@@ -526,7 +475,7 @@
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2" for="description">Description</label>
-                            <textarea id="description" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-32 resize-y"></textarea>
+                            <textarea id="description" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-32 resize-y" required></textarea>
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2" for="category">Category</label>
@@ -643,41 +592,40 @@
                         <span class="text-green-700 font-bold text-3xl mb-4 sm:mb-0">$${selectedGig.price.toFixed(2)}</span>
                         ${currentUser && currentUser.user_type === 'buyer' && currentUser.user_id !== selectedGig.user_id ? `
                             <button id="order-gig-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg glow-button">
-                                Order This Gig
+                                Order Now
                             </button>
-                        ` : `
-                            <span class="text-gray-500 italic">
-                                ${currentUser && currentUser.user_id === selectedGig.user_id ? 'This is your gig.' : 'Log in as a buyer to order.'}
-                            </span>
-                        `}
+                        ` : ''}
                     </div>
-                    <button onclick="navigateTo('gigList')" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg glow-button">Back to Gigs</button>
+                    <button id="back-to-gigs-btn" class="mt-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                        Back to Gigs
+                    </button>
                 </div>
             `;
 
+            // Fetch freelancer name
             try {
                 const freelancer = await fetchAPI(`/users/${selectedGig.user_id}`);
                 document.getElementById('freelancer-name').textContent = freelancer.name;
             } catch (error) {
-                document.getElementById('freelancer-name').textContent = 'Error loading freelancer name';
+                document.getElementById('freelancer-name').textContent = 'Unknown Freelancer';
             }
 
             if (currentUser && currentUser.user_type === 'buyer' && currentUser.user_id !== selectedGig.user_id) {
                 document.getElementById('order-gig-btn').onclick = async () => {
-                    if (!confirm('Are you sure you want to order this gig?')) return;
                     try {
-                        const orderData = await fetchAPI('/orders', 'POST', {
+                        await fetchAPI('/orders', 'POST', {
                             gig_id: selectedGig.id,
                             buyer_id: currentUser.user_id,
-                            freelancer_id: selectedGig.user_id // The gig creator is the freelancer
+                            freelancer_id: selectedGig.user_id
                         });
-                        showMessage(`Order created successfully! Order ID: ${orderData.order_id}`, 'success');
+                        showMessage('Gig ordered successfully! Check "My Orders".', 'success');
                         navigateTo('myOrders');
                     } catch (error) {
                         // Error handled by fetchAPI
                     }
                 };
             }
+            document.getElementById('back-to-gigs-btn').onclick = () => navigateTo('gigList');
         }
 
         async function renderMyOrders() {
@@ -687,384 +635,331 @@
             }
 
             const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `<h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Your Orders</h2><div id="orders-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>`;
+            contentDiv.innerHTML = `<h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Your Orders</h2><div id="orders-container" class="space-y-6"></div>`;
             const ordersContainer = document.getElementById('orders-container');
 
             try {
                 const orders = await fetchAPI(`/orders?user_id=${currentUser.user_id}&user_type=${currentUser.user_type}`);
-
                 if (orders.length === 0) {
-                    ordersContainer.innerHTML = '<div class="col-span-full text-center text-gray-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-gray-200">You have no orders yet.</div>';
+                    ordersContainer.innerHTML = '<div class="text-center text-gray-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-gray-200">No orders found.</div>';
                     return;
                 }
 
                 for (const order of orders) {
-                    const gig = await fetchAPI(`/gigs/${order.gig_id}`); // Fetch gig details for each order
-                    const otherPartyId = currentUser.user_type === 'buyer' ? order.freelancer_id : order.buyer_id;
-                    const otherParty = await fetchAPI(`/users/${otherPartyId}`); // Fetch name of the other party
+                    let gigTitle = 'Loading...';
+                    try {
+                        const gig = await fetchAPI(`/gigs/${order.gig_id}`);
+                        gigTitle = gig.title;
+                    } catch (error) {
+                        gigTitle = 'Unknown Gig';
+                    }
+
+                    let buyerName = 'Loading...';
+                    try {
+                        const buyer = await fetchAPI(`/users/${order.buyer_id}`);
+                        buyerName = buyer.name;
+                    } catch (error) {
+                        buyerName = 'Unknown Buyer';
+                    }
+
+                    let freelancerName = 'Loading...';
+                    try {
+                        const freelancer = await fetchAPI(`/users/${order.freelancer_id}`);
+                        freelancerName = freelancer.name;
+                    } catch (error) {
+                        freelancerName = 'Unknown Freelancer';
+                    }
 
                     const orderCard = document.createElement('div');
-                    orderCard.className = 'bg-white rounded-xl shadow-xl overflow-hidden border border-purple-100 flex flex-col';
+                    orderCard.className = 'bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200';
                     orderCard.innerHTML = `
-                        <div class="p-6 flex-grow">
-                            <h3 class="text-2xl font-bold text-purple-800 mb-2">Order for: ${gig.title}</h3>
-                            <p class="text-gray-700 text-sm mb-2"><strong>Order ID:</strong> ${order.id}</p>
-                            <p class="text-gray-700 text-sm mb-2"><strong>Role:</strong> ${currentUser.user_type === 'buyer' ? 'Buyer' : 'Freelancer'}</p>
-                            <p class="text-gray-700 text-sm mb-2"><strong>${currentUser.user_type === 'buyer' ? 'Freelancer' : 'Buyer'}:</strong> ${otherParty.name}</p>
-                            <p class="text-gray-700 text-sm mb-2"><strong>Status:</strong> <span class="capitalize font-semibold text-purple-600">${order.status.replace(/_/g, ' ')}</span></p>
-                            <p class="text-gray-700 text-sm mb-2"><strong>Ordered On:</strong> ${order.order_date}</p>
-                            ${order.delivery_date ? `<p class="text-gray-700 text-sm mb-2"><strong>Delivered On:</strong> ${order.delivery_date}</p>` : ''}
-                            <p class="text-gray-700 text-sm"><strong>Price:</strong> $${gig.price.toFixed(2)}</p>
-                        </div>
-                        <div class="p-6 border-t border-purple-100 flex flex-wrap gap-3 justify-center sm:justify-end">
-                            <button data-order-id="${order.id}" class="view-messages-btn bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg glow-button">
-                                View Messages
-                            </button>
-                            ${currentUser.user_type === 'freelancer' && order.status === 'in_progress' ? `
-                                <button data-order-id="${order.id}" class="mark-completed-btn bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg glow-button">
-                                    Mark Completed
-                                </button>
-                            ` : ''}
-                            ${currentUser.user_type === 'buyer' && order.status === 'completed' ? `
-                                <button data-order-id="${order.id}" class="leave-review-btn bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-4 rounded-lg glow-button">
-                                    Leave Review
-                                </button>
-                            ` : ''}
+                        <h3 class="text-2xl font-bold text-indigo-800 mb-3">Gig: ${gigTitle}</h3>
+                        <p class="text-gray-700 mb-1"><span class="font-semibold text-gray-800">Order ID:</span> ${order.id}</p>
+                        <p class="text-gray-700 mb-1"><span class="font-semibold text-gray-800">Buyer:</span> ${buyerName}</p>
+                        <p class="text-gray-700 mb-3"><span class="font-semibold text-gray-800">Freelancer:</span> ${freelancerName}</p>
+                        <p class="text-lg mb-2"><span class="font-semibold text-gray-800">Status:</span> <span class="font-bold capitalize ${order.status === 'completed' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-600' : 'text-yellow-600'}">${order.status}</span></p>
+                        <p class="text-sm text-gray-500 mb-1">Order Date: ${order.order_date}</p>
+                        ${order.delivery_date ? `<p class="text-sm text-gray-500">Delivery Date: ${order.delivery_date}</p>` : ''}
+                        <div class="mt-6 flex flex-wrap gap-3" id="order-actions-${order.id}">
+                            <!-- Action buttons -->
                         </div>
                     `;
                     ordersContainer.appendChild(orderCard);
-                }
 
-                document.querySelectorAll('.view-messages-btn').forEach(button => {
-                    button.onclick = () => {
-                        const orderId = parseInt(button.dataset.orderId);
-                        // Find the selected order object from the fetched orders array
-                        selectedOrder = orders.find(o => o.id === orderId);
-                        if (selectedOrder) {
-                            navigateTo('messages', selectedOrder);
-                        } else {
-                            showMessage('Order not found.', 'error');
-                        }
-                    };
-                });
+                    const actionsDiv = document.getElementById(`order-actions-${order.id}`);
 
-                document.querySelectorAll('.mark-completed-btn').forEach(button => {
-                    button.onclick = async () => {
-                        if (!confirm('Are you sure you want to mark this order as completed?')) return;
-                        const orderId = parseInt(button.dataset.orderId);
+                    const updateStatus = async (status) => {
                         try {
-                            await fetchAPI(`/orders/${orderId}/status`, 'PUT', { status: 'completed' });
-                            showMessage('Order marked as completed!', 'success');
-                            renderMyOrders(); // Re-render to update status
+                            await fetchAPI(`/orders/${order.id}/status`, 'PUT', { status });
+                            showMessage(`Order status updated to ${status}!`, 'success');
+                            renderMyOrders(); // Re-render to show updated status
                         } catch (error) {
                             // Error handled by fetchAPI
                         }
                     };
-                });
 
-                document.querySelectorAll('.leave-review-btn').forEach(button => {
-                    button.onclick = () => {
-                        const orderId = parseInt(button.dataset.orderId);
-                        selectedOrder = orders.find(o => o.id === orderId);
-                        if (selectedOrder) {
-                            navigateTo('reviews', selectedOrder);
+                    if (currentUser.user_type === 'freelancer' && order.status === 'in_progress') {
+                        actionsDiv.appendChild(createButton('Mark as Completed', () => updateStatus('completed'), 'bg-green-600 hover:bg-green-700'));
+                    }
+                    if (currentUser.user_type === 'freelancer' && order.status === 'pending') {
+                        actionsDiv.appendChild(createButton('Start Progress', () => updateStatus('in_progress'), 'bg-blue-600 hover:bg-blue-700'));
+                    }
+                    if ((currentUser.user_type === 'freelancer' || currentUser.user_type === 'buyer') && order.status !== 'completed' && order.status !== 'cancelled') {
+                        actionsDiv.appendChild(createButton('Cancel Order', () => updateStatus('cancelled'), 'bg-red-600 hover:bg-red-700'));
+                    }
+
+                    actionsDiv.appendChild(createButton(`Message ${currentUser.user_type === 'buyer' ? 'Freelancer' : 'Buyer'}`, () => navigateTo('messages', order), 'bg-purple-600 hover:bg-purple-700'));
+
+                    if (currentUser.user_type === 'buyer' && order.status === 'completed') {
+                        // Check if review exists for this order/buyer
+                        const reviews = await fetchAPI(`/reviews?order_id=${order.id}`);
+                        const hasReviewed = reviews.some(r => r.reviewer_id === currentUser.user_id);
+                        if (!hasReviewed) {
+                            actionsDiv.appendChild(createButton('Leave Review', () => navigateTo('reviews', order), 'bg-yellow-600 hover:bg-yellow-700'));
                         } else {
-                            showMessage('Order not found.', 'error');
+                             actionsDiv.appendChild(createButton('View Review', () => navigateTo('reviews', order), 'bg-gray-600 hover:bg-gray-700'));
                         }
-                    };
-                });
-
+                    }
+                }
             } catch (error) {
-                ordersContainer.innerHTML = `<div class="col-span-full text-center text-red-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-red-200">Failed to load orders.</div>`;
+                ordersContainer.innerHTML = `<div class="text-center text-red-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-red-200">Failed to load orders.</div>`;
             }
         }
 
         async function renderMessages() {
-            if (!currentUser || !selectedOrder) {
-                showMessage('No order selected for messages.', 'error');
+            if (!selectedOrder || !currentUser) {
                 navigateTo('myOrders');
                 return;
             }
 
+            const recipientId = currentUser.user_type === 'buyer' ? selectedOrder.freelancer_id : selectedOrder.buyer_id;
+            let recipientName = 'Loading...';
+            let gigTitle = 'Loading...';
+
+            try {
+                const [gigData, userData] = await Promise.all([
+                    fetchAPI(`/gigs/${selectedOrder.gig_id}`),
+                    fetchAPI(`/users/${recipientId}`)
+                ]);
+                gigTitle = gigData.title;
+                recipientName = userData.name;
+            } catch (error) {
+                gigTitle = 'Unknown Gig';
+                recipientName = 'Unknown User';
+            }
+
             const contentDiv = document.getElementById('content');
             contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-3xl h-full flex flex-col border border-indigo-200" id="messages-content-area">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Messages for Order #${selectedOrder.id}</h2>
-                    <div id="chat-messages-container" class="flex-grow overflow-y-auto p-4 bg-gray-50 rounded-lg border border-gray-200 mb-4">
+                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col h-[70vh] border border-indigo-200">
+                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-4">
+                        Chat for Order: <span class="text-indigo-900">${gigTitle}</span>
+                    </h2>
+                    <p class="text-center text-gray-600 text-lg mb-6">
+                        Messaging with: <span class="font-semibold text-indigo-600">${recipientName}</span>
+                    </p>
+
+                    <div id="messages-display" class="flex-grow overflow-y-auto border border-gray-300 rounded-lg p-4 mb-6 bg-gray-50 flex flex-col space-y-3 shadow-inner">
                         <!-- Messages will be loaded here -->
                     </div>
-                    <form id="send-message-form" class="flex gap-2">
-                        <input type="text" id="message-input" placeholder="Type your message..." class="flex-grow shadow-sm appearance-none border border-gray-300 rounded-lg py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200" required>
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg glow-button">Send</button>
+
+                    <form id="message-form" class="flex gap-3">
+                        <input type="text" id="new-message-input" placeholder="Type your message..." class="flex-grow shadow-sm appearance-none border border-gray-300 rounded-lg py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg glow-button">
+                            Send
+                        </button>
                     </form>
-                    <button onclick="navigateTo('myOrders')" class="mt-4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg glow-button">Back to Orders</button>
                 </div>
             `;
 
-            const chatMessagesContainer = document.getElementById('chat-messages-container');
-            const messageInput = document.getElementById('message-input');
-            const sendMessageForm = document.getElementById('send-message-form');
+            const messagesDisplay = document.getElementById('messages-display');
+            const newMessageInput = document.getElementById('new-message-input');
+            const messageForm = document.getElementById('message-form');
 
-            // NEW: Join the Socket.IO room for this order
-            if (socket && socket.connected) {
-                socket.emit('join_order_room', { order_id: selectedOrder.id });
-                console.log(`Frontend: Client joined order room: ${selectedOrder.id}`); // Added more specific log
-            } else {
-                console.warn("Frontend: Socket.IO not connected, messages might not be real-time.");
-                // Optionally, try to reconnect or show a message
-            }
-
-            // Function to fetch and display historical messages
-            const loadHistoricalMessages = async () => {
+            async function loadMessages() {
                 try {
                     const messages = await fetchAPI(`/messages?order_id=${selectedOrder.id}`);
-                    chatMessagesContainer.innerHTML = ''; // Clear previous messages
+                    messagesDisplay.innerHTML = ''; // Clear existing messages
                     if (messages.length === 0) {
-                        chatMessagesContainer.innerHTML = '<p class="text-center text-gray-500">No messages yet. Start the conversation!</p>';
+                        messagesDisplay.innerHTML = '<div class="text-center text-gray-500 italic py-4">No messages yet. Start the conversation!</div>';
                     } else {
                         messages.forEach(msg => {
-                            displayNewMessageInChat(msg);
+                            const msgDiv = document.createElement('div');
+                            msgDiv.className = `flex ${msg.sender_id === currentUser.user_id ? 'justify-end' : 'justify-start'}`;
+                            msgDiv.innerHTML = `
+                                <div class="max-w-[70%] p-3 rounded-xl shadow-sm ${
+                                    msg.sender_id === currentUser.user_id
+                                        ? 'bg-indigo-500 text-white rounded-br-none'
+                                        : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                                }">
+                                    <p class="text-sm">${msg.message}</p>
+                                    <span class="text-xs opacity-80 block mt-1 text-right">
+                                        ${new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+                            `;
+                            messagesDisplay.appendChild(msgDiv);
                         });
+                        messagesDisplay.scrollTop = messagesDisplay.scrollHeight; // Scroll to bottom
                     }
-                    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom after loading history
                 } catch (error) {
-                    chatMessagesContainer.innerHTML = `<p class="text-center text-red-500">Failed to load messages: ${error.message}</p>`;
+                    messagesDisplay.innerHTML = '<div class="text-center text-red-600 py-4">Failed to load messages.</div>';
                 }
-            };
+            }
 
-            // Call to load historical messages when view is rendered
-            await loadHistoricalMessages();
-
-            // Handle sending new messages
-            sendMessageForm.onsubmit = async (e) => {
+            messageForm.onsubmit = async (e) => {
                 e.preventDefault();
-                const messageText = messageInput.value.trim();
-                if (messageText) {
-                    try {
-                        const receiverId = currentUser.user_type === 'buyer' ? selectedOrder.freelancer_id : selectedOrder.buyer_id;
-                        // The API call to save the message to DB. Backend will then emit SocketIO event.
-                        await fetchAPI('/messages', 'POST', {
-                            order_id: selectedOrder.id,
-                            sender_id: currentUser.user_id,
-                            receiver_id: receiverId,
-                            message: messageText
-                        });
-                        messageInput.value = ''; // Clear input field
-                        // Message will be displayed via WebSocket 'new_message' event
-                    } catch (error) {
-                        // Error handled by fetchAPI
-                    }
+                const messageText = newMessageInput.value.trim();
+                if (!messageText) return;
+
+                try {
+                    await fetchAPI('/messages', 'POST', {
+                        order_id: selectedOrder.id,
+                        sender_id: currentUser.user_id,
+                        receiver_id: recipientId,
+                        message: messageText
+                    });
+                    newMessageInput.value = '';
+                    await loadMessages(); // Reload messages after sending
+                } catch (error) {
+                    // Error handled by fetchAPI
                 }
             };
+
+            loadMessages(); // Initial load
         }
 
         async function renderReviews() {
-            if (!currentUser || !selectedOrder) {
-                showMessage('No order selected for reviews.', 'error');
+            if (!selectedOrder || !currentUser) {
                 navigateTo('myOrders');
                 return;
             }
 
+            let gigTitle = 'Loading...';
+            try {
+                const gigData = await fetchAPI(`/gigs/${selectedOrder.gig_id}`);
+                gigTitle = gigData.title;
+            }
+            catch (error) {
+                gigTitle = 'Unknown Gig';
+            }
+
             const contentDiv = document.getElementById('content');
             contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-3xl border border-indigo-200">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Reviews for Order #${selectedOrder.id}</h2>
-                    
-                    ${currentUser.user_type === 'buyer' ? `
-                        <div class="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
-                            <h3 class="text-xl font-bold text-indigo-700 mb-4">Leave a Review</h3>
-                            <form id="review-form" class="space-y-4">
-                                <div>
-                                    <label class="block text-gray-700 text-sm font-medium mb-2" for="rating">Rating (1-5)</label>
-                                    <input type="number" id="rating" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200" min="1" max="5" required>
-                                </div>
-                                <div>
-                                    <label class="block text-gray-700 text-sm font-medium mb-2" for="comment">Comment (Optional)</label>
-                                    <textarea id="comment" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-24 resize-y"></textarea>
-                                </div>
-                                <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded-lg glow-button">Submit Review</button>
-                            </form>
-                        </div>
-                    ` : '<p class="text-center text-gray-600 mb-6">Only buyers can leave reviews for completed orders.</p>'}
+                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-indigo-200">
+                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">
+                        Reviews for Order: <span class="text-indigo-900">${gigTitle}</span>
+                    </h2>
 
-                    <h3 class="text-xl font-bold text-indigo-700 mb-4">Past Reviews for this Order</h3>
-                    <div id="reviews-list" class="space-y-4">
+                    <div id="review-form-container"></div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2 border-gray-200">All Reviews for this Order</h3>
+                    <div id="reviews-display" class="space-y-5">
                         <!-- Reviews will be loaded here -->
                     </div>
-                    <button onclick="navigateTo('myOrders')" class="mt-6 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg glow-button">Back to Orders</button>
                 </div>
             `;
 
-            const reviewsListContainer = document.getElementById('reviews-list');
+            const reviewFormContainer = document.getElementById('review-form-container');
+            const reviewsDisplay = document.getElementById('reviews-display');
 
-            // Load and display existing reviews
-            const loadReviews = async () => {
+            async function loadReviews() {
                 try {
                     const reviews = await fetchAPI(`/reviews?order_id=${selectedOrder.id}`);
-                    reviewsListContainer.innerHTML = ''; // Clear previous reviews
+                    reviewsDisplay.innerHTML = ''; // Clear existing reviews
+                    let hasUserReviewed = false;
+
                     if (reviews.length === 0) {
-                        reviewsListContainer.innerHTML = '<p class="text-center text-gray-500">No reviews for this order yet.</p>';
+                        reviewsDisplay.innerHTML = '<div class="text-center text-gray-500 italic py-4">No reviews yet for this order.</div>';
                     } else {
-                        for (const review of reviews) {
-                            const reviewer = await fetchAPI(`/users/${review.reviewer_id}`);
+                        reviews.forEach(review => {
+                            if (review.reviewer_id === currentUser.user_id) {
+                                hasUserReviewed = true;
+                            }
                             const reviewCard = document.createElement('div');
-                            reviewCard.className = 'bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200';
+                            reviewCard.className = 'bg-gray-50 p-5 rounded-lg shadow-sm border border-gray-200';
                             reviewCard.innerHTML = `
-                                <p class="font-bold text-gray-800">${reviewer.name} - Rating: ${'⭐'.repeat(review.rating)}</p>
-                                <p class="text-gray-600 text-sm">${review.comment || 'No comment provided.'}</p>
-                                <p class="text-gray-500 text-xs mt-1">Reviewed on: ${new Date(review.review_date).toLocaleDateString()}</p>
+                                <div class="flex items-center mb-2">
+                                    <span class="font-bold text-xl text-indigo-600">${review.rating} / 5 Stars</span>
+                                    ${review.reviewer_id === currentUser.user_id ? '<span class="ml-3 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">Your Review</span>' : ''}
+                                </div>
+                                <p class="text-gray-700 text-base leading-relaxed">${review.comment}</p>
+                                <p class="text-xs text-gray-500 mt-3">
+                                    Reviewed on: ${review.review_date}
+                                </p>
                             `;
-                            reviewsListContainer.appendChild(reviewCard);
-                        }
+                            reviewsDisplay.appendChild(reviewCard);
+                        });
                     }
+
+                    // Render review form only if buyer and order completed and not yet reviewed
+                    if (currentUser.user_type === 'buyer' && selectedOrder.status === 'completed' && !hasUserReviewed) {
+                        reviewFormContainer.innerHTML = `
+                            <div class="mb-8 p-6 border border-gray-200 rounded-xl bg-blue-50 shadow-inner">
+                                <h3 class="text-xl font-bold text-blue-700 mb-4">Leave a Review</h3>
+                                <form id="review-form" class="space-y-4">
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-medium mb-2" for="rating">Rating (1-5)</label>
+                                        <input type="number" id="rating" min="1" max="5" value="5" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-medium mb-2" for="comment">Comment</label>
+                                        <textarea id="comment" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 h-24 resize-y"></textarea>
+                                    </div>
+                                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg glow-button">
+                                        Submit Review
+                                    </button>
+                                </form>
+                            </div>
+                        `;
+                        document.getElementById('review-form').onsubmit = async (e) => {
+                            e.preventDefault();
+                            const rating = parseInt(document.getElementById('rating').value);
+                            const comment = document.getElementById('comment').value;
+
+                            if (isNaN(rating) || rating < 1 || rating > 5) {
+                                showMessage('Rating must be between 1 and 5.', 'error');
+                                return;
+                            }
+
+                            try {
+                                await fetchAPI('/reviews', 'POST', {
+                                    order_id: selectedOrder.id,
+                                    reviewer_id: currentUser.user_id,
+                                    rating,
+                                    comment
+                                });
+                                showMessage('Review submitted successfully!', 'success');
+                                await loadReviews(); // Reload reviews to show the new one and hide form
+                            } catch (error) {
+                                // Error handled by fetchAPI
+                            }
+                        };
+                    } else {
+                        reviewFormContainer.innerHTML = ''; // Hide form if already reviewed or not buyer/completed
+                    }
+
                 } catch (error) {
-                    reviewsListContainer.innerHTML = `<p class="text-center text-red-500">Failed to load reviews: ${error.message}</p>`;
-                }
-            };
-
-            await loadReviews();
-
-            if (currentUser.user_type === 'buyer') {
-                const reviewForm = document.getElementById('review-form');
-                if (reviewForm) {
-                    reviewForm.onsubmit = async (e) => {
-                        e.preventDefault();
-                        const rating = parseInt(document.getElementById('rating').value);
-                        const comment = document.getElementById('comment').value.trim();
-
-                        if (isNaN(rating) || rating < 1 || rating > 5) {
-                            showMessage('Please provide a rating between 1 and 5.', 'error');
-                            return;
-                        }
-
-                        try {
-                            await fetchAPI('/reviews', 'POST', {
-                                order_id: selectedOrder.id,
-                                reviewer_id: currentUser.user_id,
-                                rating: rating,
-                                comment: comment
-                            });
-                            showMessage('Review submitted successfully!', 'success');
-                            await loadReviews(); // Reload reviews to show the new one
-                            reviewForm.reset(); // Clear the form
-                        } catch (error) {
-                            // Error handled by fetchAPI
-                        }
-                    };
+                    reviewsDisplay.innerHTML = '<div class="text-center text-red-600 py-4">Failed to load reviews.</div>';
                 }
             }
+
+            loadReviews(); // Initial load for reviews
         }
 
-        // --- Core Application Logic (Init) ---
-
-        // NEW: Function to display a new message in the chat UI
-        function displayNewMessageInChat(message) {
-            const chatMessagesContainer = document.getElementById('chat-messages-container');
-            if (!chatMessagesContainer) {
-                console.error("Frontend: Chat messages container not found!"); // Added more specific log
-                return;
-            }
-
-            console.log("Frontend: Displaying new message in chat:", message); // Added more specific log
-
-            const messageElement = document.createElement('div');
-            // Add class based on who sent the message for different styling (e.g., right vs left)
-            messageElement.classList.add('message-item');
-            if (currentUser && message.sender_id === currentUser.user_id) { // Added currentUser check
-                messageElement.classList.add('sent-by-me');
-            }
-
-            // Format timestamp (if sent_at is a full datetime string)
-            let sentTime = '';
-            try {
-                sentTime = new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } catch (e) {
-                console.warn("Frontend: Could not parse message.sent_at:", message.sent_at, e); // Warn on parse error
-                sentTime = ''; // Fallback if date parsing fails
-            }
-
-            messageElement.innerHTML = `
-                <div class="font-semibold text-sm mb-1">${currentUser && message.sender_id === currentUser.user_id ? 'You' : `User ${message.sender_id}`} <span class="text-gray-500 text-xs">${sentTime}</span></div>
-                <p class="text-gray-800">${message.message}</p>
-            `;
-            
-            chatMessagesContainer.appendChild(messageElement);
-
-            // Scroll to the bottom to show the latest message
-            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-        }
-
-
-        // Load current user from localStorage on page load
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- Initial Load ---
+        window.onload = async () => { // Marked as async and added await
             const storedUser = localStorage.getItem('currentUser');
             if (storedUser) {
-                currentUser = JSON.parse(storedUser);
-                currentView = 'dashboard'; // Go to dashboard if already logged in
+                try {
+                    currentUser = JSON.parse(storedUser);
+                    currentView = 'dashboard'; // Go to dashboard if user found
+                } catch (e) {
+                    console.error("Failed to parse stored user data:", e);
+                    localStorage.removeItem('currentUser');
+                }
             }
-            render();
+            await render(); // Await the render call
+        };
 
-            // NEW: Initialize Socket.IO connection when DOM is ready
-            // The socket object is already declared globally at the top
-            // If you are getting 'websocket error' or 'xhr poll error', the primary issue is likely
-            // your backend's Gunicorn configuration (it needs --worker-class eventlet)
-            // and potentially a missing or misconfigured REDIS_URL environment variable on Render.com.
-            // These options are already included for robustness, but the server must support the connection.
-            socket = io(SOCKET_IO_SERVER_URL, {
-                transports: ['websocket', 'polling'], // Explicitly prefer websocket, then polling
-                withCredentials: true, // Important for CORS and session/cookie handling if any
-                forceNew: true, // Force a new connection instead of reusing a cached one
-                // Optional: If you suspect a version mismatch with an older Flask-SocketIO, you might try:
-                // allowEIO3: true,
-            });
-
-            // Added connect_error listener for debugging
-            socket.on('connect_error', (error) => {
-                console.error("Frontend: Socket.IO Connection Error:", error);
-                // More specific messages based on the error type
-                if (error.message.includes('websocket error') || error.message.includes('xhr poll error')) {
-                    showMessage(`WebSocket connection failed. This usually means the backend Socket.IO server is not reachable or incorrectly configured. Please verify your backend's Gunicorn start command on Render.com (--worker-class eventlet) and ensure any required Redis service (REDIS_URL) is properly set up.`, 'error');
-                } else if (error.message.includes('timeout')) {
-                     showMessage(`WebSocket connection timed out. The backend server might be slow to respond or unreachable.`, 'error');
-                }
-                else {
-                    showMessage(`WebSocket connection error: ${error.message}. Real-time features may not work.`, 'error');
-                }
-            });
-
-            socket.on('connect', () => {
-                console.log('Frontend: Connected to WebSocket server. Socket ID:', socket.id); // Log socket ID
-                // If we are already in a messages view when connected, join the room
-                if (currentView === 'messages' && selectedOrder && selectedOrder.id) {
-                    socket.emit('join_order_room', { order_id: selectedOrder.id });
-                    console.log(`Frontend: Attempting to join order room: ${selectedOrder.id}`); // More specific log
-                }
-            });
-
-            socket.on('disconnect', (reason) => {
-                console.log('Frontend: Disconnected from WebSocket server. Reason:', reason); // Log disconnect reason
-            });
-
-            socket.on('status', (data) => {
-                console.log('Frontend: Server status:', data.msg);
-            });
-
-            socket.on('new_message', (message) => {
-                console.log('Frontend: New message received via WebSocket:', message);
-                // Only display if the message belongs to the currently viewed order
-                if (selectedOrder && message.order_id === selectedOrder.id) {
-                    displayNewMessageInChat(message);
-                } else {
-                    console.log('Frontend: Message received for another order or no order selected.');
-                }
-            });
-
-            // NEW: Add a 'leave_order_room_ack' event handler on the frontend as well
-            // This is for when the user navigates away from the messages view.
-            socket.on('leave_order_room_ack', (data) => {
-                console.log('Frontend: Left order room:', data.order_id);
-            });
-        });
     </script>
 </body>
 </html>
