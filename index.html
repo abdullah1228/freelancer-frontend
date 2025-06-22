@@ -1,959 +1,1262 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Freelancerrr - Simple Frontend</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            background-color: #e2e8f0; /* Lighter grey-blue background */
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .container {
-            max-width: 1280px; /* Increased from 1024px for more distributed space */
-            margin: 0 auto;
-            padding: 1.5rem;
-            flex-grow: 1;
-            display: flex; /* Always a flex container */
-            flex-direction: column; /* Always a column */
-            align-items: center; /* Always horizontally center children within the column */
-            justify-content: flex-start; /* Default: Align content to the top */
-        }
-        /* New class to apply for vertical centering of main's content */
-        .container.center-content {
-            justify-content: center; /* Override to center vertically */
-        }
+import React, { useState, useEffect, createContext, useContext } from 'react';
 
-        .message-box {
-            background-color: #fff3e0; /* Light orange for warning/info */
-            border: 1px solid #ffcc80;
-            color: #e65100;
-            padding: 0.75rem 1.25rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1.5rem;
-            text-align: center;
-            font-weight: 600;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-            width: 100%; /* Ensure it spans the width */
-            max-width: 600px; /* Limit width for better readability */
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .message-box.error {
-            background-color: #ffebee; /* Light red for error */
-            border-color: #ef9a9a;
-            color: #c62828;
-        }
-        .message-box.success {
-            background-color: #e8f5e9; /* Light green for success */
-            border-color: #a5d6a7;
-            color: #2e7d32;
-        }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.5rem;
-            color: #4b5563;
-            z-index: 1000;
-        }
-        /* Custom styles for glowing buttons */
-        .glow-button {
-            transition: all 0.3s ease-in-out;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-        }
-        .glow-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15), 0 3px 6px rgba(0, 0, 0, 0.1);
-        }
-        .glow-button.bg-indigo-600:hover {
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.7); /* Indigo glow */
-        }
-        .glow-button.bg-red-500:hover {
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.7); /* Red glow */
-        }
-        .glow-button.bg-green-600:hover {
-            box-shadow: 0 0 15px rgba(52, 211, 153, 0.7); /* Green glow */
-        }
-        .glow-button.bg-blue-600:hover {
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.7); /* Blue glow */
-        }
-        .glow-button.bg-purple-600:hover {
-            box-shadow: 0 0 15px rgba(168, 85, 247, 0.7); /* Purple glow */
-        }
-        .glow-button.bg-yellow-600:hover {
-            box-shadow: 0 0 15px rgba(250, 204, 21, 0.7); /* Yellow glow */
-        }
-    </style>
-</head>
-<body>
-    <header class="w-full bg-gradient-to-r from-indigo-700 to-indigo-500 shadow-xl p-4 flex flex-col sm:flex-row justify-between items-center rounded-b-xl">
-        <h1 class="text-4xl font-extrabold text-white mb-3 sm:mb-0 sm:text-left">Freelancerrr</h1>
-        <nav id="navbar" class="flex flex-wrap justify-center sm:justify-end items-center space-x-2 sm:space-x-4">
-            <!-- Navigation buttons will be rendered here by JS -->
-        </nav>
-    </header>
+// Define a placeholder for your backend API URL
+// IMPORTANT: Replace with the actual URL where your Flask backend is running.
+// For example, if your Flask app runs on http://127.0.0.1:5000, set this to 'http://127.0.0.1:5000/api'.
+const API_BASE_URL = 'https://freelancer-backend-rahz.onrender.com/api'; // UPDATED to your provided Render.com URL
 
-    <main class="container p-6">
-        <!-- Loading overlay remains outside content div -->
-        <div id="loading" class="loading-overlay hidden">
-            <p>Loading...</p>
-        </div>
-        <div id="content" class="w-full">
-            <!-- Dynamic content will be rendered here by JS -->
-        </div>
-    </main>
+// Global context for application state (user, navigation)
+const AppContext = createContext(null);
 
-    <footer class="w-full bg-gray-800 text-white p-4 text-center text-sm mt-auto">
-        Made by Abdullah Adnan, Roll number: L1F23BSCS1247
-    </footer>
+// Main App Component
+function App() {
+    const [userId, setUserId] = useState(null);
+    const [user, setUser] = useState(null); // Stores user data from backend
+    const [view, setView] = useState('auth'); // 'auth', 'dashboard', 'createGig', 'gigList', 'gigDetail', 'myOrders', 'messages', 'reviews'
+    const [selectedGig, setSelectedGig] = useState(null);
+    const [selectedOrder, setSelectedOrder] = useState(null); // For review/message context
+    const [isLoadingApp, setIsLoadingApp] = useState(true);
 
-    <script>
-        // IMPORTANT: Replace with the actual URL where your Flask backend is running.
-        const API_BASE_URL = 'https://freelancer-backend-rahz.onrender.com/api';
-
-        let currentUser = null; // Stores logged-in user data
-        let currentView = 'auth'; // 'auth', 'dashboard', 'createGig', 'gigList', 'gigDetail', 'myOrders', 'messages', 'reviews'
-        let selectedGig = null; // For gigDetail view
-        let selectedOrder = null; // For messages/reviews view
-
-        // --- Utility Functions ---
-
-        function showLoading(show) {
-            document.getElementById('loading').classList.toggle('hidden', !show);
-        }
-
-        function showMessage(msg, type = 'info') {
-            const messageBox = document.createElement('div');
-            messageBox.className = `message-box ${type}`;
-            messageBox.textContent = msg;
-            const mainContainer = document.querySelector('main');
-            // Remove any existing message boxes before adding a new one
-            document.querySelectorAll('.message-box').forEach(box => box.remove());
-            if (mainContainer) {
-                // Insert message box at the top of the main content area
-                mainContainer.insertBefore(messageBox, mainContainer.firstChild);
+    // Simulate initial user check/login (e.g., from a stored session token)
+    useEffect(() => {
+        const checkSession = async () => {
+            console.log("Attempting to restore session from local storage...");
+            setIsLoadingApp(true);
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    // In a real app, you'd validate this user with a backend API call
+                    // e.g., fetch(`${API_BASE_URL}/validate-session`, { headers: { 'Authorization': `Bearer ${parsedUser.token}` }})
+                    // For this demo, we'll just re-set the user if found in local storage
+                    setUser(parsedUser);
+                    setUserId(parsedUser.user_id);
+                    setView('dashboard');
+                    console.log("Session restored:", parsedUser.email);
+                } catch (e) {
+                    console.error("Failed to parse stored user data:", e);
+                    localStorage.removeItem('currentUser'); // Clear invalid data
+                }
             } else {
-                document.body.prepend(messageBox); // Fallback if main not found
+                console.log("No stored session found.");
             }
-            setTimeout(() => messageBox.remove(), 5000); // Remove after 5 seconds
+            setIsLoadingApp(false);
+        };
+        checkSession();
+    }, []);
+
+    const navigateTo = (newView, data = null) => {
+        setView(newView);
+        if (newView === 'gigDetail') {
+            setSelectedGig(data);
+        } else if (newView === 'reviews' || newView === 'messages') {
+            setSelectedOrder(data);
+        } else {
+            setSelectedGig(null);
+            setSelectedOrder(null);
+        }
+    };
+
+    if (isLoadingApp) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-gray-100">
+                <div className="text-xl font-semibold text-gray-700">Loading app...</div>
+            </div>
+        );
+    }
+
+    return (
+        <AppContext.Provider value={{ userId, user, setUser, navigateTo, setView, API_BASE_URL, setUserId }}>
+            <div className="min-h-screen bg-gray-100 font-inter text-gray-800 flex flex-col items-center">
+                <Header userId={userId} userType={user?.user_type} navigateTo={navigateTo} />
+                <main className="flex-grow container mx-auto p-6 flex justify-center w-full max-w-4xl">
+                    {view === 'auth' && <Auth />}
+                    {view === 'dashboard' && <Dashboard />}
+                    {view === 'createGig' && <CreateGig />}
+                    {view === 'gigList' && <GigList />}
+                    {view === 'gigDetail' && selectedGig && <GigDetail gig={selectedGig} />}
+                    {view === 'myOrders' && <MyOrders />}
+                    {view === 'messages' && selectedOrder && <Messages order={selectedOrder} />}
+                    {view === 'reviews' && selectedOrder && <Reviews order={selectedOrder} />}
+                </main>
+            </div>
+        </AppContext.Provider>
+    );
+}
+
+// Header Component
+function Header({ userId, userType, navigateTo }) {
+    const { setUser, setUserId } = useContext(AppContext);
+
+    const handleLogout = async () => {
+        console.log("Logging out...");
+        // Clear user data from local storage and state
+        localStorage.removeItem('currentUser');
+        setUser(null);
+        setUserId(null);
+        navigateTo('auth');
+        console.log("User signed out.");
+    };
+
+    return (
+        <header className="w-full bg-indigo-600 shadow-lg p-4 flex flex-col sm:flex-row justify-between items-center rounded-b-lg">
+            <h1 className="text-3xl font-bold text-white mb-2 sm:mb-0">Freelancerrr</h1>
+            <nav className="flex flex-wrap justify-center sm:justify-end items-center space-x-2 sm:space-x-4">
+                {userId && <span className="text-white text-sm">User ID: {userId}</span>}
+                {userType && <span className="text-white text-sm capitalize">Role: {userType}</span>}
+                {userType && (
+                    <>
+                        <button
+                            onClick={() => navigateTo('dashboard')}
+                            className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                        >
+                            Dashboard
+                        </button>
+                        {userType === 'freelancer' && (
+                            <button
+                                onClick={() => navigateTo('createGig')}
+                                className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                            >
+                                Create Gig
+                            </button>
+                        )}
+                        {userType === 'buyer' && (
+                            <button
+                                onClick={() => navigateTo('gigList')}
+                                className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                            >
+                                Browse Gigs
+                            </button>
+                        )}
+                        <button
+                            onClick={() => navigateTo('myOrders')}
+                            className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                        >
+                            My Orders
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                        >
+                            Logout
+                        </button>
+                    </>
+                )}
+            </nav>
+        </header>
+    );
+}
+
+// Auth Component (Login/Registration)
+function Auth() {
+    const { setUser, navigateTo, API_BASE_URL, setUserId } = useContext(AppContext);
+
+    const [isLogin, setIsLogin] = useState(true);
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [userType, setUserType] = useState('freelancer'); // 'freelancer' or 'buyer'
+    const [message, setMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setMessage('');
+        setIsLoading(true);
+
+        if (!email || !password || (!isLogin && !name)) {
+            setMessage('Please fill in all fields.');
+            setIsLoading(false);
+            return;
         }
 
-        async function fetchAPI(endpoint, method = 'GET', body = null) {
-            showLoading(true);
-            try {
-                const options = { method: method };
-                if (body) {
-                    options.headers = { 'Content-Type': 'application/json' };
-                    options.body = JSON.stringify(body);
-                }
-                console.log(`Sending ${method} request to: ${API_BASE_URL}${endpoint}`);
-                console.log('Request body:', body);
+        try {
+            let response;
+            let result;
 
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    console.error('API response not OK:', response.status, data);
-                    throw new Error(data.message || `HTTP error! status: ${response.status}`);
-                }
-                console.log('API response success:', data);
-                return data;
-            } catch (error) {
-                console.error(`API Error on ${endpoint}:`, error);
-                showMessage(`Error: ${error.message}. Make sure your backend is running.`, 'error');
-                throw error; // Re-throw to be caught by specific view handlers
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // --- Navigation and View Rendering ---
-
-        function navigateTo(view, data = null) {
-            currentView = view;
-            selectedGig = null;
-            selectedOrder = null;
-            if (view === 'gigDetail') {
-                selectedGig = data;
-            } else if (view === 'messages' || view === 'reviews') {
-                selectedOrder = data;
-            }
-            render();
-        }
-
-        function renderNavbar() {
-            const navbar = document.getElementById('navbar');
-            navbar.innerHTML = ''; // Clear existing buttons
-
-            if (currentUser) {
-                const userInfoContainer = document.createElement('div');
-                userInfoContainer.className = 'flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-4 mb-2 sm:mb-0';
-
-                const userIdSpan = document.createElement('span');
-                userIdSpan.className = 'text-white text-sm font-light';
-                userIdSpan.textContent = `User ID: ${currentUser.user_id}`;
-                userInfoContainer.appendChild(userIdSpan);
-
-                const roleSpan = document.createElement('span');
-                roleSpan.className = 'text-white text-sm capitalize font-medium';
-                roleSpan.textContent = `Role: ${currentUser.user_type}`;
-                userInfoContainer.appendChild(roleSpan);
-                navbar.appendChild(userInfoContainer);
-
-
-                const dashboardBtn = createButton('Dashboard', () => navigateTo('dashboard'), 'bg-indigo-700 hover:bg-indigo-800');
-                navbar.appendChild(dashboardBtn);
-
-                if (currentUser.user_type === 'freelancer') {
-                    const createGigBtn = createButton('Create Gig', () => navigateTo('createGig'), 'bg-indigo-700 hover:bg-indigo-800');
-                    navbar.appendChild(createGigBtn);
-                }
-                if (currentUser.user_type === 'buyer') {
-                    const browseGigsBtn = createButton('Browse Gigs', () => navigateTo('gigList'), 'bg-indigo-700 hover:bg-indigo-800');
-                    navbar.appendChild(browseGigsBtn);
-                }
-                const myOrdersBtn = createButton('My Orders', () => navigateTo('myOrders'), 'bg-indigo-700 hover:bg-indigo-800');
-                navbar.appendChild(myOrdersBtn);
-
-                const logoutBtn = createButton('Logout', logout, 'bg-red-500 hover:bg-red-600');
-                navbar.appendChild(logoutBtn);
-            }
-        }
-
-        function createButton(text, onClickHandler, className) {
-            const button = document.createElement('button');
-            button.textContent = text;
-            button.className = `${className} text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out glow-button`;
-            button.onclick = onClickHandler;
-            return button;
-        }
-
-        function render() {
-            renderNavbar();
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = ''; // Clear previous content
-            const mainContainer = document.querySelector('main.container');
-
-            // Reset flex properties on mainContainer and contentDiv for each render
-            mainContainer.classList.remove('center-content');
-            contentDiv.classList.remove('flex', 'flex-col', 'items-center', 'justify-center', 'flex-grow');
-
-            if (currentView === 'auth') {
-                mainContainer.classList.add('center-content'); // Centers #content within main vertically
-                // Make #content fill space and internally center its child (the auth form)
-                contentDiv.classList.add('flex', 'flex-col', 'items-center', 'justify-center', 'flex-grow'); 
-            }
-
-            switch (currentView) {
-                case 'auth':
-                    renderAuth();
-                    break;
-                case 'dashboard':
-                    renderDashboard();
-                    break;
-                case 'createGig':
-                    renderCreateGig();
-                    break;
-                case 'gigList':
-                    renderGigList();
-                    break;
-                case 'gigDetail':
-                    renderGigDetail();
-                    break;
-                case 'myOrders':
-                    renderMyOrders();
-                    break;
-                case 'messages':
-                    renderMessages();
-                    break;
-                case 'reviews':
-                    renderReviews();
-                    break;
-                default:
-                    renderAuth();
-            }
-        }
-
-        // --- Specific View Renderers ---
-
-        async function renderAuth() {
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border border-indigo-200">
-                    <h2 id="auth-title" class="text-3xl font-bold text-center text-indigo-700 mb-8">Login</h2>
-                    <form id="auth-form" class="space-y-6">
-                        <div id="name-field" class="hidden">
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="name">Name</label>
-                            <input type="text" id="name" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
-                        </div>
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="email">Email</label>
-                            <input type="email" id="email" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
-                        </div>
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="password">Password</label>
-                            <input type="password" id="password" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
-                        </div>
-                        <div id="user-type-field" class="hidden">
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="userType">I am a:</label>
-                            <select id="userType" class="block appearance-none w-full bg-white border border-gray-300 text-gray-800 py-3 px-4 pr-8 rounded-lg shadow-sm leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
-                                <option value="freelancer">Freelancer</option>
-                                <option value="buyer">Buyer</option>
-                            </select>
-                        </div>
-                        <button type="submit" id="auth-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline glow-button">Login</button>
-                    </form>
-                    <p class="mt-8 text-center text-gray-600 text-sm">
-                        Don't have an account? <button id="toggle-auth-mode" class="text-indigo-600 hover:text-indigo-800 font-bold transition duration-200">Register here</button>
-                    </p>
-                </div>
-            `;
-
-            let isLoginMode = true;
-            const authTitle = document.getElementById('auth-title');
-            const nameField = document.getElementById('name-field');
-            const userTypeField = document.getElementById('user-type-field');
-            const authSubmitBtn = document.getElementById('auth-submit-btn');
-            const toggleAuthModeBtn = document.getElementById('toggle-auth-mode');
-            const authForm = document.getElementById('auth-form');
-
-            const toggleAuthMode = (e) => {
-                if (e) e.stopPropagation();
-                isLoginMode = !isLoginMode;
-                authTitle.textContent = isLoginMode ? 'Login' : 'Register';
-                authSubmitBtn.textContent = isLoginMode ? 'Login' : 'Register';
-                toggleAuthModeBtn.textContent = isLoginMode ? 'Register here' : 'Login here';
-                nameField.classList.toggle('hidden', isLoginMode);
-                userTypeField.classList.toggle('hidden', isLoginMode);
-                console.log(`Switched to ${isLoginMode ? 'Login' : 'Register'} mode.`);
-            };
-
-            toggleAuthModeBtn.onclick = toggleAuthMode;
-
-            authForm.onsubmit = async (e) => {
-                debugger;
-                e.preventDefault();
-                console.log('Auth form submitted.');
-
-                const name = document.getElementById('name').value;
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                const userType = document.getElementById('userType').value;
-
-                console.log('Captured form values:', { name, email, password, userType, isLoginMode });
-
-                if (!email || !password || (!isLoginMode && !name)) {
-                    showMessage('Please fill in all fields.', 'error');
-                    console.log('Validation failed: Missing fields.');
-                    return;
-                }
-
-                try {
-                    let data;
-                    if (isLoginMode) {
-                        console.log('Calling API for login...');
-                        data = await fetchAPI('/login', 'POST', { email, password });
-                        if (data.user) {
-                            currentUser = data.user;
-                            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                            showMessage(data.message, 'success');
-                            console.log('Login successful, navigating to dashboard.');
-                            navigateTo('dashboard');
-                        } else {
-                            // Specific error message for login failure
-                            showMessage('Wrong username or password', 'error'); 
-                            console.log('Login failed based on API response.');
-                        }
-                    } else {
-                        console.log('Calling API for registration...');
-                        data = await fetchAPI('/register', 'POST', { name, email, password, user_type: userType });
-                        if (data.user) {
-                            currentUser = data.user;
-                            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                            showMessage(data.message, 'success');
-                            console.log('Registration successful, navigating to dashboard.');
-                            navigateTo('dashboard');
-                        } else {
-                            showMessage(data.message || 'Registration failed.', 'error');
-                            console.log('Registration failed based on API response.');
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error during auth API call:', error);
-                    // Error message already shown by fetchAPI
-                }
-            };
-        }
-
-        async function logout() {
-            currentUser = null;
-            localStorage.removeItem('currentUser');
-            showMessage('Logged out successfully.', 'success');
-            navigateTo('auth');
-        }
-
-        function renderDashboard() {
-            if (!currentUser) {
-                navigateTo('auth');
-                return;
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full border border-indigo-200">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-8">Welcome, <span class="text-indigo-900">${currentUser.name}!</span></h2>
-                    <p class="text-center text-gray-700 text-lg mb-10">
-                        You are logged in as a <span class="font-semibold capitalize text-indigo-600">${currentUser.user_type}</span>.
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mx-auto max-w-fit">
-                        ${currentUser.user_type === 'freelancer' ? `
-                            <div class="bg-blue-50 p-8 rounded-xl shadow-lg flex flex-col items-center justify-center text-center border border-blue-200">
-                                <h3 class="text-xl font-bold text-blue-700 mb-3">Your Gigs</h3>
-                                <p class="text-gray-600 mb-6">Manage and create your freelance services.</p>
-                                <button id="create-gig-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg glow-button">
-                                    Create New Gig
-                                </button>
-                            </div>
-                        ` : ''}
-                        ${currentUser.user_type === 'buyer' ? `
-                            <div class="bg-green-50 p-8 rounded-xl shadow-lg flex flex-col items-center justify-center text-center border border-green-200">
-                                <h3 class="text-xl font-bold text-green-700 mb-3">Find Gigs</h3>
-                                <p class="text-gray-600 mb-6">Explore services offered by freelancers.</p>
-                                <button id="browse-gigs-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg glow-button">
-                                    Browse Gigs
-                                </button>
-                            </div>
-                        ` : ''}
-                        <div class="bg-purple-50 p-8 rounded-xl shadow-lg flex flex-col items-center justify-center text-center border border-purple-200">
-                            <h3 class="text-xl font-bold text-purple-700 mb-3">Your Orders</h3>
-                            <p class="text-gray-600 mb-6">View your current and past orders.</p>
-                            <button id="my-orders-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg glow-button">
-                                View Orders
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            if (currentUser.user_type === 'freelancer') {
-                document.getElementById('create-gig-btn').onclick = () => navigateTo('createGig');
-            }
-            if (currentUser.user_type === 'buyer') {
-                document.getElementById('browse-gigs-btn').onclick = () => navigateTo('gigList');
-            }
-            document.getElementById('my-orders-btn').onclick = () => navigateTo('myOrders');
-        }
-
-        async function renderCreateGig() {
-            if (!currentUser || currentUser.user_type !== 'freelancer') {
-                showMessage('You must be a freelancer to create a gig.', 'error');
-                navigateTo('dashboard');
-                return;
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg border border-indigo-200">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-8">Create a New Gig</h2>
-                    <form id="create-gig-form" class="space-y-6">
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="title">Gig Title</label>
-                            <input type="text" id="title" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200" required>
-                        </div>
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="description">Description</label>
-                            <textarea id="description" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 h-32 resize-y" required></textarea>
-                        </div>
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="category">Category</label>
-                            <select id="category" class="block appearance-none w-full bg-white border border-gray-300 text-gray-800 py-3 px-4 pr-8 rounded-lg shadow-sm leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200" required>
-                                <!-- Categories will be loaded here -->
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-gray-700 text-sm font-medium mb-2" for="price">Price ($)</label>
-                            <input type="number" id="price" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200" min="0.01" step="0.01" required>
-                        </div>
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg glow-button">Create Gig</button>
-                    </form>
-                </div>
-            `;
-
-            const categorySelect = document.getElementById('category');
-            try {
-                const categories = await fetchAPI('/categories');
-                categories.forEach(cat => {
-                    const option = document.createElement('option');
-                    option.value = cat.name;
-                    option.textContent = cat.name;
-                    categorySelect.appendChild(option);
+            if (isLogin) {
+                console.log("Attempting login via API...");
+                response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
                 });
-            } catch (error) {
-                // Error handled by fetchAPI
+            } else {
+                console.log("Attempting registration via API...");
+                response = await fetch(`${API_BASE_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password, user_type }),
+                });
             }
 
-            document.getElementById('create-gig-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const title = document.getElementById('title').value;
-                const description = document.getElementById('description').value;
-                const category = document.getElementById('category').value;
-                const price = parseFloat(document.getElementById('price').value);
+            result = await response.json();
 
-                if (!title || !description || !category || isNaN(price) || price <= 0) {
-                    showMessage('Please fill in all fields correctly.', 'error');
-                    return;
-                }
+            if (response.ok) {
+                // Backend will return 'user' object on success
+                const authenticatedUser = result.user;
+                setUser(authenticatedUser);
+                setUserId(authenticatedUser.user_id);
+                localStorage.setItem('currentUser', JSON.stringify(authenticatedUser)); // Store user data
+                setMessage(result.message);
+                navigateTo('dashboard');
+            } else {
+                setMessage(result.message || 'An error occurred during authentication.');
+            }
+        } catch (error) {
+            console.error("Auth API call error:", error);
+            setMessage(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-                try {
-                    await fetchAPI('/gigs', 'POST', {
-                        user_id: currentUser.user_id,
-                        title,
-                        description,
-                        category,
-                        price
-                    });
-                    showMessage('Gig created successfully!', 'success');
-                    navigateTo('dashboard');
-                } catch (error) {
-                    // Error handled by fetchAPI
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">
+                {isLogin ? 'Login' : 'Register'}
+            </h2>
+            <form onSubmit={handleAuth} className="space-y-4">
+                {!isLogin && (
+                    <div>
+                        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
+                            Name
+                        </label>
+                        <input
+                            type="text"
+                            id="name"
+                            className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required={!isLogin}
+                        />
+                    </div>
+                )}
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
+                        Email
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                </div>
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+                        Password
+                    </label>
+                    <input
+                        type="password"
+                        id="password"
+                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                </div>
+                {!isLogin && (
+                    <div>
+                        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="userType">
+                            I am a:
+                        </label>
+                        <select
+                            id="userType"
+                            className="block appearance-none w-full bg-white border border-gray-400 text-gray-700 py-2 px-3 pr-8 rounded-lg shadow leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            value={userType}
+                            onChange={(e) => setUserType(e.target.value)}
+                        >
+                            <option value="freelancer">Freelancer</option>
+                            <option value="buyer">Buyer</option>
+                        </select>
+                    </div>
+                )}
+                <button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 ease-in-out transform hover:scale-105 shadow-md"
+                    disabled={isLoading}
+                >
+                    {isLoading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
+                </button>
+            </form>
+            {message && (
+                <p className="mt-4 text-center text-sm font-semibold text-red-600">{message}</p>
+            )}
+            <p className="mt-6 text-center text-gray-600 text-sm">
+                {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
+                <button
+                    onClick={() => {
+                        setIsLogin(!isLogin);
+                        setMessage('');
+                        setName('');
+                        setEmail('');
+                        setPassword('');
+                    }}
+                    className="text-indigo-600 hover:text-indigo-800 font-bold"
+                >
+                    {isLogin ? 'Register here' : 'Login here'}
+                </button>
+            </p>
+        </div>
+    );
+}
+
+// Dashboard Component (No changes needed, as it only uses user state)
+function Dashboard() {
+    const { user, navigateTo } = useContext(AppContext);
+
+    if (!user) {
+        return <div className="text-center text-gray-600">Please log in to view your dashboard.</div>;
+    }
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">
+                Welcome, {user.name}!
+            </h2>
+            <p className="text-center text-gray-700 mb-8">
+                You are logged in as a <span className="font-semibold capitalize">{user.user_type}</span>.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {user.user_type === 'freelancer' && (
+                    <div className="bg-blue-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center">
+                        <h3 className="text-xl font-semibold text-blue-700 mb-3">Your Gigs</h3>
+                        <p className="text-gray-600 mb-4">Manage and create your freelance services.</p>
+                        <button
+                            onClick={() => navigateTo('createGig')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                        >
+                            Create New Gig
+                        </button>
+                    </div>
+                )}
+                {user.user_type === 'buyer' && (
+                    <div className="bg-green-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center">
+                        <h3 className="text-xl font-semibold text-green-700 mb-3">Find Gigs</h3>
+                        <p className="text-gray-600 mb-4">Explore services offered by freelancers.</p>
+                        <button
+                            onClick={() => navigateTo('gigList')}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                        >
+                            Browse Gigs
+                        </button>
+                    </div>
+                )}
+                <div className="bg-purple-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center">
+                    <h3 className="text-xl font-semibold text-purple-700 mb-3">Your Orders</h3>
+                    <p className="text-gray-600 mb-4">View your current and past orders.</p>
+                    <button
+                        onClick={() => navigateTo('myOrders')}
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                    >
+                        View Orders
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// CreateGig Component
+function CreateGig() {
+    const { userId, user, navigateTo, API_BASE_URL } = useContext(AppContext);
+
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [category, setCategory] = useState('');
+    const [price, setPrice] = useState('');
+    const [message, setMessage] = useState('');
+    const [categories, setCategories] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Fetch categories from the backend API
+    useEffect(() => {
+        const fetchCategories = async () => {
+            setIsLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/categories`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            };
+                const data = await response.json();
+                setCategories(data);
+                if (data.length > 0) {
+                    setCategory(data[0].name); // Set default category
+                }
+            } catch (error) {
+                console.error("Error fetching categories:", error);
+                setMessage("Error fetching categories. Make sure your backend is running.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchCategories();
+    }, [API_BASE_URL]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMessage('');
+        setIsLoading(true);
+
+        if (!user || user.user_type !== 'freelancer') {
+            setMessage('You must be a freelancer to create a gig.');
+            setIsLoading(false);
+            return;
         }
 
-        async function renderGigList() {
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `<h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Available Gigs</h2><div id="gigs-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>`;
-            const gigsContainer = document.getElementById('gigs-container');
+        if (!title || !description || !category || !price) {
+            setMessage('Please fill in all fields.');
+            setIsLoading(false);
+            return;
+        }
 
+        if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+            setMessage('Price must be a positive number.');
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/gigs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    title,
+                    description,
+                    category, // Send category name, backend will find ID
+                    price: parseFloat(price),
+                }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                setMessage('Gig created successfully!');
+                setTitle('');
+                setDescription('');
+                setPrice('');
+                navigateTo('dashboard'); // Go back to dashboard after creation
+            } else {
+                setMessage(`Error creating gig: ${result.message || response.statusText}`);
+            }
+        } catch (error) {
+            console.error("Error creating gig:", error);
+            setMessage(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="text-center text-gray-600">Loading categories...</div>;
+    }
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-lg">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">Create a New Gig</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="title">
+                        Gig Title
+                    </label>
+                    <input
+                        type="text"
+                        id="title"
+                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        required
+                    />
+                </div>
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="description">
+                        Description
+                    </label>
+                    <textarea
+                        id="description"
+                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 h-32"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        required
+                    ></textarea>
+                </div>
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="category">
+                        Category
+                    </label>
+                    <select
+                        id="category"
+                        className="block appearance-none w-full bg-white border border-gray-400 text-gray-700 py-2 px-3 pr-8 rounded-lg shadow leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        required
+                    >
+                        {categories.map((cat) => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="price">
+                        Price ($)
+                    </label>
+                    <input
+                        type="number"
+                        id="price"
+                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        min="0.01"
+                        step="0.01"
+                        required
+                    />
+                </div>
+                <button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 ease-in-out transform hover:scale-105 shadow-md"
+                    disabled={isLoading}
+                >
+                    {isLoading ? 'Creating...' : 'Create Gig'}
+                </button>
+            </form>
+            {message && (
+                <p className="mt-4 text-center text-sm font-semibold text-red-600">{message}</p>
+            )}
+        </div>
+    );
+}
+
+// GigList Component
+function GigList() {
+    const { navigateTo, API_BASE_URL } = useContext(AppContext);
+
+    const [gigs, setGigs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchGigs = async () => {
+            setLoading(true);
+            setError('');
             try {
-                const gigs = await fetchAPI('/gigs');
-                if (gigs.length === 0) {
-                    gigsContainer.innerHTML = '<div class="col-span-full text-center text-gray-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-gray-200">No gigs available yet. Be the first to create one!</div>';
-                    return;
+                const response = await fetch(`${API_BASE_URL}/gigs`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const data = await response.json();
+                setGigs(data);
+            } catch (err) {
+                console.error("Error fetching gigs:", err);
+                setError(`Failed to load gigs: ${err.message}. Make sure your backend is running.`);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchGigs();
+    }, [API_BASE_URL]);
 
-                gigs.forEach(gig => {
-                    const gigCard = document.createElement('div');
-                    gigCard.className = 'bg-white rounded-xl shadow-xl overflow-hidden transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl border border-indigo-100';
-                    gigCard.innerHTML = `
-                        <div class="p-6 flex flex-col h-full">
-                            <h3 class="text-2xl font-bold text-indigo-800 mb-2">${gig.title}</h3>
-                            <p class="text-sm text-indigo-600 font-semibold mb-3">${gig.category}</p>
-                            <p class="text-gray-700 text-base mb-4 flex-grow line-clamp-4">${gig.description}</p>
-                            <div class="flex justify-between items-center mt-auto pt-4 border-t border-gray-100">
-                                <span class="text-green-600 font-bold text-xl">$${gig.price.toFixed(2)}</span>
-                                <button class="view-details-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg glow-button">
+    if (loading) {
+        return <div className="text-center text-gray-600">Loading gigs...</div>;
+    }
+
+    if (error) {
+        return <div className="text-center text-red-600">{error}</div>;
+    }
+
+    if (gigs.length === 0) {
+        return <div className="text-center text-gray-600">No gigs available yet.</div>;
+    }
+
+    return (
+        <div className="w-full">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">Available Gigs</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {gigs.map(gig => (
+                    <div key={gig.id} className="bg-white rounded-lg shadow-md overflow-hidden transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl">
+                        <div className="p-5">
+                            <h3 className="text-xl font-semibold text-gray-900 mb-2">{gig.title}</h3>
+                            <p className="text-sm text-gray-600 mb-3">{gig.category}</p>
+                            <p className="text-gray-700 text-base mb-4 line-clamp-3">{gig.description}</p>
+                            <div className="flex justify-between items-center">
+                                <span className="text-indigo-600 font-bold text-lg">${gig.price.toFixed(2)}</span>
+                                <button
+                                    onClick={() => navigateTo('gigDetail', gig)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md"
+                                >
                                     View Details
                                 </button>
                             </div>
                         </div>
-                    `;
-                    gigCard.querySelector('.view-details-btn').onclick = () => navigateTo('gigDetail', gig);
-                    gigsContainer.appendChild(gigCard);
-                });
-            } catch (error) {
-                gigsContainer.innerHTML = `<div class="col-span-full text-center text-red-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-red-200">Failed to load gigs.</div>`;
-            }
-        }
-
-        async function renderGigDetail() {
-            if (!selectedGig) {
-                navigateTo('gigList');
-                return;
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-3xl border border-indigo-200">
-                    <h2 class="text-4xl font-extrabold text-indigo-700 mb-4">${selectedGig.title}</h2>
-                    <p class="text-lg text-gray-700 mb-2">
-                        <span class="font-semibold text-indigo-600">Category:</span> ${selectedGig.category}
-                    </p>
-                    <p class="text-lg text-gray-700 mb-4">
-                        <span class="font-semibold text-indigo-600">Freelancer:</span> <span id="freelancer-name" class="text-indigo-900 font-medium">Loading...</span>
-                    </p>
-                    <p class="text-gray-800 text-lg mb-6 leading-relaxed">
-                        <span class="font-semibold text-indigo-600">Description:</span><br> ${selectedGig.description}
-                    </p>
-                    <div class="flex flex-col sm:flex-row justify-between items-center mb-8 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                        <span class="text-green-700 font-bold text-3xl mb-4 sm:mb-0">$${selectedGig.price.toFixed(2)}</span>
-                        ${currentUser && currentUser.user_type === 'buyer' && currentUser.user_id !== selectedGig.user_id ? `
-                            <button id="order-gig-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg glow-button">
-                                Order Now
-                            </button>
-                        ` : ''}
                     </div>
-                    <button id="back-to-gigs-btn" class="mt-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
-                        Back to Gigs
-                    </button>
-                </div>
-            `;
+                ))}
+            </div>
+        </div>
+    );
+}
 
-            // Fetch freelancer name
-            try {
-                const freelancer = await fetchAPI(`/users/${selectedGig.user_id}`);
-                document.getElementById('freelancer-name').textContent = freelancer.name;
-            } catch (error) {
-                document.getElementById('freelancer-name').textContent = 'Unknown Freelancer';
-            }
+// GigDetail Component
+function GigDetail({ gig }) {
+    const { userId, user, navigateTo, API_BASE_URL } = useContext(AppContext);
 
-            if (currentUser && currentUser.user_type === 'buyer' && currentUser.user_id !== selectedGig.user_id) {
-                document.getElementById('order-gig-btn').onclick = async () => {
-                    try {
-                        await fetchAPI('/orders', 'POST', {
-                            gig_id: selectedGig.id,
-                            buyer_id: currentUser.user_id,
-                            freelancer_id: selectedGig.user_id
-                        });
-                        showMessage('Gig ordered successfully! Check "My Orders".', 'success');
-                        navigateTo('myOrders');
-                    } catch (error) {
-                        // Error handled by fetchAPI
-                    }
-                };
-            }
-            document.getElementById('back-to-gigs-btn').onclick = () => navigateTo('gigList');
-        }
+    const [message, setMessage] = useState('');
+    const [freelancerName, setFreelancerName] = useState('Unknown Freelancer');
+    const [isLoading, setIsLoading] = useState(true);
 
-        async function renderMyOrders() {
-            if (!currentUser) {
-                navigateTo('auth');
-                return;
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `<h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Your Orders</h2><div id="orders-container" class="space-y-6"></div>`;
-            const ordersContainer = document.getElementById('orders-container');
-
-            try {
-                const orders = await fetchAPI(`/orders?user_id=${currentUser.user_id}&user_type=${currentUser.user_type}`);
-                if (orders.length === 0) {
-                    ordersContainer.innerHTML = '<div class="text-center text-gray-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-gray-200">No orders found.</div>';
-                    return;
-                }
-
-                for (const order of orders) {
-                    let gigTitle = 'Loading...';
-                    try {
-                        const gig = await fetchAPI(`/gigs/${order.gig_id}`);
-                        gigTitle = gig.title;
-                    } catch (error) {
-                        gigTitle = 'Unknown Gig';
-                    }
-
-                    let buyerName = 'Loading...';
-                    try {
-                        const buyer = await fetchAPI(`/users/${order.buyer_id}`);
-                        buyerName = buyer.name;
-                    } catch (error) {
-                        buyerName = 'Unknown Buyer';
-                    }
-
-                    let freelancerName = 'Loading...';
-                    try {
-                        const freelancer = await fetchAPI(`/users/${order.freelancer_id}`);
-                        freelancerName = freelancer.name;
-                    } catch (error) {
-                        freelancerName = 'Unknown Freelancer';
-                    }
-
-                    const orderCard = document.createElement('div');
-                    orderCard.className = 'bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200';
-                    orderCard.innerHTML = `
-                        <h3 class="text-2xl font-bold text-indigo-800 mb-3">Gig: ${gigTitle}</h3>
-                        <p class="text-gray-700 mb-1"><span class="font-semibold text-gray-800">Order ID:</span> ${order.id}</p>
-                        <p class="text-gray-700 mb-1"><span class="font-semibold text-gray-800">Buyer:</span> ${buyerName}</p>
-                        <p class="text-gray-700 mb-3"><span class="font-semibold text-gray-800">Freelancer:</span> ${freelancerName}</p>
-                        <p class="text-lg mb-2"><span class="font-semibold text-gray-800">Status:</span> <span class="font-bold capitalize ${order.status === 'completed' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-600' : 'text-yellow-600'}">${order.status}</span></p>
-                        <p class="text-sm text-gray-500 mb-1">Order Date: ${order.order_date}</p>
-                        ${order.delivery_date ? `<p class="text-sm text-gray-500">Delivery Date: ${order.delivery_date}</p>` : ''}
-                        <div class="mt-6 flex flex-wrap gap-3" id="order-actions-${order.id}">
-                            <!-- Action buttons -->
-                        </div>
-                    `;
-                    ordersContainer.appendChild(orderCard);
-
-                    const actionsDiv = document.getElementById(`order-actions-${order.id}`);
-
-                    const updateStatus = async (status) => {
-                        try {
-                            await fetchAPI(`/orders/${order.id}/status`, 'PUT', { status });
-                            showMessage(`Order status updated to ${status}!`, 'success');
-                            renderMyOrders(); // Re-render to show updated status
-                        } catch (error) {
-                            // Error handled by fetchAPI
-                        }
-                    };
-
-                    if (currentUser.user_type === 'freelancer' && order.status === 'in_progress') {
-                        actionsDiv.appendChild(createButton('Mark as Completed', () => updateStatus('completed'), 'bg-green-600 hover:bg-green-700'));
-                    }
-                    if (currentUser.user_type === 'freelancer' && order.status === 'pending') {
-                        actionsDiv.appendChild(createButton('Start Progress', () => updateStatus('in_progress'), 'bg-blue-600 hover:bg-blue-700'));
-                    }
-                    if ((currentUser.user_type === 'freelancer' || currentUser.user_type === 'buyer') && order.status !== 'completed' && order.status !== 'cancelled') {
-                        actionsDiv.appendChild(createButton('Cancel Order', () => updateStatus('cancelled'), 'bg-red-600 hover:bg-red-700'));
-                    }
-
-                    actionsDiv.appendChild(createButton(`Message ${currentUser.user_type === 'buyer' ? 'Freelancer' : 'Buyer'}`, () => navigateTo('messages', order), 'bg-purple-600 hover:bg-purple-700'));
-
-                    if (currentUser.user_type === 'buyer' && order.status === 'completed') {
-                        actionsDiv.appendChild(createButton('Leave Review', () => navigateTo('reviews', order), 'bg-yellow-600 hover:bg-yellow-700'));
-                    }
-                }
-            } catch (error) {
-                ordersContainer.innerHTML = `<div class="text-center text-red-600 py-8 text-lg bg-white rounded-xl shadow-lg border border-red-200">Failed to load orders.</div>`;
-            }
-        }
-
-        async function renderMessages() {
-            if (!selectedOrder || !currentUser) {
-                navigateTo('myOrders');
-                return;
-            }
-
-            const recipientId = currentUser.user_type === 'buyer' ? selectedOrder.freelancer_id : selectedOrder.buyer_id;
-            let recipientName = 'Loading...';
-            let gigTitle = 'Loading...';
-
-            try {
-                const [gigData, userData] = await Promise.all([
-                    fetchAPI(`/gigs/${selectedOrder.gig_id}`),
-                    fetchAPI(`/users/${recipientId}`)
-                ]);
-                gigTitle = gigData.title;
-                recipientName = userData.name;
-            } catch (error) {
-                gigTitle = 'Unknown Gig';
-                recipientName = 'Unknown User';
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col h-[70vh] border border-indigo-200">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-4">
-                        Chat for Order: <span class="text-indigo-900">${gigTitle}</span>
-                    </h2>
-                    <p class="text-center text-gray-600 text-lg mb-6">
-                        Messaging with: <span class="font-semibold text-indigo-600">${recipientName}</span>
-                    </p>
-
-                    <div id="messages-display" class="flex-grow overflow-y-auto border border-gray-300 rounded-lg p-4 mb-6 bg-gray-50 flex flex-col space-y-3 shadow-inner">
-                        <!-- Messages will be loaded here -->
-                    </div>
-
-                    <form id="message-form" class="flex gap-3">
-                        <input type="text" id="new-message-input" placeholder="Type your message..." class="flex-grow shadow-sm appearance-none border border-gray-300 rounded-lg py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg glow-button">
-                            Send
-                        </button>
-                    </form>
-                </div>
-            `;
-
-            const messagesDisplay = document.getElementById('messages-display');
-            const newMessageInput = document.getElementById('new-message-input');
-            const messageForm = document.getElementById('message-form');
-
-            async function loadMessages() {
+    // Fetch freelancer name from the backend API
+    useEffect(() => {
+        const fetchFreelancerName = async () => {
+            if (gig && gig.user_id) {
+                setIsLoading(true);
                 try {
-                    const messages = await fetchAPI(`/messages?order_id=${selectedOrder.id}`);
-                    messagesDisplay.innerHTML = ''; // Clear existing messages
-                    if (messages.length === 0) {
-                        messagesDisplay.innerHTML = '<div class="text-center text-gray-500 italic py-4">No messages yet. Start the conversation!</div>';
+                    const response = await fetch(`${API_BASE_URL}/users/${gig.user_id}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setFreelancerName(data.name);
                     } else {
-                        messages.forEach(msg => {
-                            const msgDiv = document.createElement('div');
-                            msgDiv.className = `flex ${msg.sender_id === currentUser.user_id ? 'justify-end' : 'justify-start'}`;
-                            msgDiv.innerHTML = `
-                                <div class="max-w-[70%] p-3 rounded-xl shadow-sm ${
-                                    msg.sender_id === currentUser.user_id
+                        setFreelancerName('Unknown Freelancer');
+                        console.error(`Failed to fetch freelancer ${gig.user_id}: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error("Error fetching freelancer name:", error);
+                    setFreelancerName('Error loading name');
+                } finally {
+                    setIsLoading(false);
+                }
+            }
+        };
+        fetchFreelancerName();
+    }, [gig, API_BASE_URL]);
+
+    const handleOrderGig = async () => {
+        setMessage('');
+        if (!user || user.user_type !== 'buyer') {
+            setMessage('You must be logged in as a buyer to order a gig.');
+            return;
+        }
+
+        if (user.user_id === gig.user_id) {
+            setMessage('You cannot order your own gig.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    gig_id: gig.id,
+                    buyer_id: userId,
+                    freelancer_id: gig.user_id,
+                }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                setMessage('Gig ordered successfully! Check "My Orders".');
+                navigateTo('myOrders');
+            } else {
+                setMessage(`Error ordering gig: ${result.message || response.statusText}`);
+            }
+        } catch (error) {
+            console.error("Error ordering gig:", error);
+            setMessage(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (!gig) {
+        return <div className="text-center text-gray-600">Gig details not found.</div>;
+    }
+    if (isLoading) {
+        return <div className="text-center text-gray-600">Loading gig details...</div>;
+    }
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl">
+            <h2 className="text-4xl font-bold text-indigo-700 mb-4">{gig.title}</h2>
+            <p className="text-lg text-gray-700 mb-2">
+                <span className="font-semibold">Category:</span> {gig.category}
+            </p>
+            <p className="text-lg text-gray-700 mb-4">
+                <span className="font-semibold">Freelancer:</span> {freelancerName}
+            </p>
+            <p className="text-gray-800 text-lg mb-6 leading-relaxed">
+                <span className="font-semibold">Description:</span><br/> {gig.description}
+            </p>
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-8 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                <span className="text-green-700 font-bold text-3xl mb-4 sm:mb-0">${gig.price.toFixed(2)}</span>
+                {currentUser && currentUser.user_type === 'buyer' && currentUser.user_id !== gig.user_id ? (
+                    <button
+                        onClick={handleOrderGig}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg glow-button"
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Ordering...' : 'Order Now'}
+                    </button>
+                ) : null}
+            </div>
+            {message && (
+                <p className="mt-4 text-center text-sm font-semibold text-red-600">{message}</p>
+            )}
+            <button
+                onClick={() => navigateTo('gigList')}
+                className="mt-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+            >
+                Back to Gigs
+            </button>
+        </div>
+    );
+}
+
+// MyOrders Component
+function MyOrders() {
+    const { userId, user, navigateTo, API_BASE_URL } = useContext(AppContext);
+
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [gigDetails, setGigDetails] = useState({}); // To store gig titles
+    const [userNames, setUserNames] = useState({}); // To store user names (buyer/freelancer)
+
+    useEffect(() => {
+        const fetchOrders = async () => {
+            if (!userId || !user) {
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setError('');
+            try {
+                // Fetch orders for the current user (either as buyer or freelancer)
+                const ordersResponse = await fetch(`${API_BASE_URL}/orders?user_id=${userId}&user_type=${user.user_type}`);
+                if (!ordersResponse.ok) {
+                    throw new Error(`HTTP error! status: ${ordersResponse.status}`);
+                }
+                const fetchedOrders = await ordersResponse.json();
+                setOrders(fetchedOrders);
+
+                // Batch fetch related gig details and user names
+                const gigIdsToFetch = new Set();
+                const userIdsToFetch = new Set();
+                fetchedOrders.forEach(order => {
+                    gigIdsToFetch.add(order.gig_id);
+                    userIdsToFetch.add(order.buyer_id);
+                    userIdsToFetch.add(order.freelancer_id);
+                });
+
+                const fetchedGigDetails = {};
+                const fetchedUserNames = {};
+
+                // Fetch gig titles
+                await Promise.all(Array.from(gigIdsToFetch).map(async (gigId) => {
+                    if (!gigDetails[gigId]) { // Avoid re-fetching if already present
+                        try {
+                            const gigRes = await fetch(`${API_BASE_URL}/gigs/${gigId}`);
+                            if (gigRes.ok) {
+                                const gigData = await gigRes.json();
+                                fetchedGigDetails[gigId] = gigData.title;
+                            } else {
+                                fetchedGigDetails[gigId] = 'Unknown Gig';
+                            }
+                        } catch (err) {
+                            console.error(`Error fetching gig ${gigId}:`, err);
+                            fetchedGigDetails[gigId] = 'Error loading gig';
+                        }
+                    } else {
+                        fetchedGigDetails[gigId] = gigDetails[gigId];
+                    }
+                }));
+
+                // Fetch user names
+                await Promise.all(Array.from(userIdsToFetch).map(async (uId) => {
+                    if (!userNames[uId]) { // Avoid re-fetching if already present
+                        try {
+                            const userRes = await fetch(`${API_BASE_URL}/users/${uId}`);
+                            if (userRes.ok) {
+                                const userData = await userRes.json();
+                                fetchedUserNames[uId] = userData.name;
+                            } else {
+                                fetchedUserNames[uId] = 'Unknown User';
+                            }
+                        } catch (err) {
+                            console.error(`Error fetching user ${uId}:`, err);
+                            fetchedUserNames[uId] = 'Error loading user';
+                        }
+                    } else {
+                        fetchedUserNames[uId] = userNames[uId];
+                    }
+                }));
+
+                setGigDetails(prev => ({ ...prev, ...fetchedGigDetails }));
+                setUserNames(prev => ({ ...prev, ...fetchedUserNames }));
+
+            } catch (err) {
+                console.error("Error fetching orders:", err);
+                setError(`Failed to load orders: ${err.message}. Make sure your backend is running.`);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchOrders();
+    }, [API_BASE_URL, userId, user]); // Re-fetch when user or API_BASE_URL changes
+
+    const handleUpdateOrderStatus = async (orderId, newStatus) => {
+        try {
+            setLoading(true); // Show loading while updating
+            const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                // Optimistically update the UI or re-fetch for real-time consistency
+                setOrders(prevOrders => prevOrders.map(order =>
+                    order.id === orderId ? { ...order, status: newStatus, delivery_date: newStatus === 'completed' ? new Date().toISOString().split('T')[0] : order.delivery_date } : order
+                ));
+                console.log(`Order ${orderId} status updated to ${newStatus}`);
+            } else {
+                setError(`Failed to update status: ${result.message || response.statusText}`);
+            }
+        } catch (error) {
+            console.error("Error updating order status:", error);
+            setError(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="text-center text-gray-600">Loading orders...</div>;
+    }
+
+    if (error) {
+        return <div className="text-center text-red-600">{error}</div>;
+    }
+
+    if (orders.length === 0) {
+        return <div className="text-center text-gray-600">No orders found.</div>;
+    }
+
+    return (
+        <div className="w-full">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">Your Orders</h2>
+            {orders.map(order => (
+                <div key={order.id} className="bg-white rounded-lg shadow-md p-6 mb-4">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Gig: {gigDetails[order.gig_id] || 'Loading...'}</h3>
+                    <p className="text-gray-700">Order ID: {order.id}</p>
+                    <p className="text-gray-700">Buyer: {userNames[order.buyer_id] || 'Loading...'}</p>
+                    <p className="text-gray-700">Freelancer: {userNames[order.freelancer_id] || 'Loading...'}</p>
+                    <p className="text-gray-700">Status: <span className={`font-semibold capitalize ${order.status === 'completed' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-600' : 'text-yellow-600'}`}>{order.status}</span></p>
+                    <p className="text-gray-700">Order Date: {order.order_date}</p>
+                    {order.delivery_date && <p className="text-gray-700">Delivery Date: {order.delivery_date}</p>}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {user?.user_type === 'freelancer' && order.status === 'in_progress' && (
+                            <button
+                                onClick={() => handleUpdateOrderStatus(order.id, 'completed')}
+                                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                                disabled={loading}
+                            >
+                                Mark as Completed
+                            </button>
+                        )}
+                        {user?.user_type === 'freelancer' && order.status === 'pending' && (
+                            <button
+                                onClick={() => handleUpdateOrderStatus(order.id, 'in_progress')}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                                disabled={loading}
+                            >
+                                Start Progress
+                            </button>
+                        )}
+                        {(user?.user_type === 'freelancer' || user?.user_type === 'buyer') && order.status !== 'completed' && order.status !== 'cancelled' && (
+                             <button
+                                onClick={() => handleUpdateOrderStatus(order.id, 'cancelled')}
+                                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                                disabled={loading}
+                            >
+                                Cancel Order
+                            </button>
+                        )}
+
+                        <button
+                            onClick={() => navigateTo('messages', order)}
+                            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                        >
+                            Message {user?.user_type === 'buyer' ? 'Freelancer' : 'Buyer'}
+                        </button>
+                        {user?.user_type === 'buyer' && order.status === 'completed' && (
+                            <button
+                                onClick={() => navigateTo('reviews', order)}
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                            >
+                                Leave Review
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// Messages Component
+function Messages({ order }) {
+    const { userId, user, API_BASE_URL } = useContext(AppContext);
+
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [recipientName, setRecipientName] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [gigTitle, setGigTitle] = useState('');
+
+    const recipientId = user?.user_type === 'buyer' ? order.freelancer_id : order.buyer_id;
+
+    // Fetch messages and related details from the backend API
+    useEffect(() => {
+        const fetchChatData = async () => {
+            if (!order || !userId || !recipientId) {
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setError('');
+
+            try {
+                // Fetch gig title
+                const gigResponse = await fetch(`${API_BASE_URL}/gigs/${order.gig_id}`);
+                if (gigResponse.ok) {
+                    const gigData = await gigResponse.json();
+                    setGigTitle(gigData.title);
+                } else {
+                    setGigTitle('Unknown Gig');
+                    console.error(`Failed to fetch gig ${order.gig_id}: ${gigResponse.status}`);
+                }
+
+                // Fetch recipient name
+                const recipientResponse = await fetch(`${API_BASE_URL}/users/${recipientId}`);
+                if (recipientResponse.ok) {
+                    const recipientData = await recipientResponse.json();
+                    setRecipientName(recipientData.name);
+                } else {
+                    setRecipientName('Unknown User');
+                    console.error(`Failed to fetch recipient ${recipientId}: ${recipientResponse.status}`);
+                }
+
+                // Fetch messages for this order
+                const messagesResponse = await fetch(`${API_BASE_URL}/messages?order_id=${order.id}`);
+                if (!messagesResponse.ok) {
+                    throw new Error(`HTTP error! status: ${messagesResponse.status}`);
+                }
+                const fetchedMessages = await messagesResponse.json();
+                setMessages(fetchedMessages.sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at)));
+
+            } catch (err) {
+                console.error("Error fetching chat data:", err);
+                setError(`Failed to load chat data: ${err.message}. Make sure your backend is running.`);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchChatData();
+    }, [API_BASE_URL, order, userId, recipientId]);
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !userId || !recipientId) return;
+
+        setLoading(true); // Show loading while sending
+        try {
+            const response = await fetch(`${API_BASE_URL}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: order.id,
+                    sender_id: userId,
+                    receiver_id: recipientId,
+                    message: newMessage,
+                }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                // Add the new message to the local state for immediate display
+                // (assuming backend returns the full message object, or reconstruct it)
+                const tempMessage = {
+                    id: result.message_id || `temp_msg_${Date.now()}`, // Use actual ID if returned
+                    order_id: order.id,
+                    sender_id: userId,
+                    receiver_id: recipientId,
+                    message: newMessage,
+                    sent_at: new Date().toISOString(), // Use ISO string for consistency
+                };
+                setMessages(prevMessages => [...prevMessages, tempMessage].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at)));
+                setNewMessage('');
+            } else {
+                setError(`Failed to send message: ${result.message || response.statusText}`);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+            setError(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) return <div className="text-center text-gray-600">Loading messages...</div>;
+    if (error) return <div className="text-center text-red-600">{error}</div>;
+    if (!order) return <div className="text-center text-gray-600">No order selected for messages.</div>;
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl flex flex-col h-[70vh]">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-4">
+                Chat for Order: {gigTitle || order.gig_id}
+            </h2>
+            <p className="text-center text-gray-600 mb-4">
+                Messaging with: <span className="font-semibold">{recipientName || 'Loading...'}</span>
+            </p>
+
+            <div className="flex-grow overflow-y-auto border border-gray-300 rounded-lg p-4 mb-4 bg-gray-50 flex flex-col space-y-3">
+                {messages.length === 0 ? (
+                    <div className="text-center text-gray-500 italic">No messages yet. Start the conversation!</div>
+                ) : (
+                    messages.map((msg) => (
+                        <div
+                            key={msg.id}
+                            className={`flex ${msg.sender_id === userId ? 'justify-end' : 'justify-start'}`}
+                        >
+                            <div
+                                className={`max-w-[70%] p-3 rounded-xl shadow-sm ${
+                                    msg.sender_id === userId
                                         ? 'bg-indigo-500 text-white rounded-br-none'
                                         : 'bg-gray-200 text-gray-800 rounded-bl-none'
-                                }">
-                                    <p class="text-sm">${msg.message}</p>
-                                    <span class="text-xs opacity-80 block mt-1 text-right">
-                                        ${new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                            `;
-                            messagesDisplay.appendChild(msgDiv);
-                        });
-                        messagesDisplay.scrollTop = messagesDisplay.scrollHeight; // Scroll to bottom
-                    }
-                } catch (error) {
-                    messagesDisplay.innerHTML = '<div class="text-center text-red-600 py-4">Failed to load messages.</div>';
-                }
-            }
+                                }`}
+                            >
+                                <p className="text-sm">{msg.message}</p>
+                                <span className="text-xs opacity-80 block mt-1">
+                                    {new Date(msg.sent_at).toLocaleTimeString()}
+                                </span>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
 
-            messageForm.onsubmit = async (e) => {
-                e.preventDefault();
-                const messageText = newMessageInput.value.trim();
-                if (!messageText) return;
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-grow shadow appearance-none border rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={loading}
+                />
+                <button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                    disabled={loading}
+                >
+                    {loading ? 'Sending...' : 'Send'}
+                </button>
+            </form>
+        </div>
+    );
+}
 
-                try {
-                    await fetchAPI('/messages', 'POST', {
-                        order_id: selectedOrder.id,
-                        sender_id: currentUser.user_id,
-                        receiver_id: recipientId,
-                        message: messageText
-                    });
-                    newMessageInput.value = '';
-                    await loadMessages(); // Reload messages after sending
-                } catch (error) {
-                    // Error handled by fetchAPI
-                }
-            };
+// Reviews Component
+function Reviews({ order }) {
+    const { userId, user, API_BASE_URL } = useContext(AppContext);
 
-            loadMessages(); // Initial load
-        }
+    const [reviews, setReviews] = useState([]);
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState('');
+    const [message, setMessage] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [gigTitle, setGigTitle] = useState('');
+    const [hasReviewed, setHasReviewed] = useState(false); // To check if buyer has already reviewed this order
 
-        async function renderReviews() {
-            if (!selectedOrder || !currentUser) {
-                navigateTo('myOrders');
+    // Fetch reviews and related details from the backend API
+    useEffect(() => {
+        const fetchReviewData = async () => {
+            if (!order) {
+                setLoading(false);
                 return;
             }
 
-            let gigTitle = 'Loading...';
+            setLoading(true);
+            setError('');
+
             try {
-                const gigData = await fetchAPI(`/gigs/${selectedOrder.gig_id}`);
-                gigTitle = gigData.title;
-            }
-            catch (error) {
-                gigTitle = 'Unknown Gig';
-            }
-
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-indigo-200">
-                    <h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">
-                        Reviews for Order: <span class="text-indigo-900">${gigTitle}</span>
-                    </h2>
-
-                    <div id="review-form-container"></div>
-                    <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2 border-gray-200">All Reviews for this Order</h3>
-                    <div id="reviews-display" class="space-y-5">
-                        <!-- Reviews will be loaded here -->
-                    </div>
-                </div>
-            `;
-
-            const reviewFormContainer = document.getElementById('review-form-container');
-            const reviewsDisplay = document.getElementById('reviews-display');
-
-            async function loadReviews() {
-                try {
-                    const reviews = await fetchAPI(`/reviews?order_id=${selectedOrder.id}`);
-                    reviewsDisplay.innerHTML = ''; // Clear existing reviews
-                    let hasUserReviewed = false;
-
-                    if (reviews.length === 0) {
-                        reviewsDisplay.innerHTML = '<div class="text-center text-gray-500 italic py-4">No reviews yet for this order.</div>';
-                    } else {
-                        reviews.forEach(review => {
-                            if (review.reviewer_id === currentUser.user_id) {
-                                hasUserReviewed = true;
-                            }
-                            const reviewCard = document.createElement('div');
-                            reviewCard.className = 'bg-gray-50 p-5 rounded-lg shadow-sm border border-gray-200';
-                            reviewCard.innerHTML = `
-                                <div class="flex items-center mb-2">
-                                    <span class="font-bold text-xl text-indigo-600">${review.rating} / 5 Stars</span>
-                                    ${review.reviewer_id === currentUser.user_id ? '<span class="ml-3 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">Your Review</span>' : ''}
-                                </div>
-                                <p class="text-gray-700 text-base leading-relaxed">${review.comment}</p>
-                                <p class="text-xs text-gray-500 mt-3">
-                                    Reviewed on: ${review.review_date}
-                                </p>
-                            `;
-                            reviewsDisplay.appendChild(reviewCard);
-                        });
-                    }
-
-                    // Render review form only if buyer and order completed and not yet reviewed
-                    if (currentUser.user_type === 'buyer' && selectedOrder.status === 'completed' && !hasUserReviewed) {
-                        reviewFormContainer.innerHTML = `
-                            <div class="mb-8 p-6 border border-gray-200 rounded-xl bg-blue-50 shadow-inner">
-                                <h3 class="text-xl font-bold text-blue-700 mb-4">Leave a Review</h3>
-                                <form id="review-form" class="space-y-4">
-                                    <div>
-                                        <label class="block text-gray-700 text-sm font-medium mb-2" for="rating">Rating (1-5)</label>
-                                        <input type="number" id="rating" min="1" max="5" value="5" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200" required>
-                                    </div>
-                                    <div>
-                                        <label class="block text-gray-700 text-sm font-medium mb-2" for="comment">Comment</label>
-                                        <textarea id="comment" class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 h-24 resize-y"></textarea>
-                                    </div>
-                                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg glow-button">
-                                        Submit Review
-                                    </button>
-                                </form>
-                            </div>
-                        `;
-                        document.getElementById('review-form').onsubmit = async (e) => {
-                            e.preventDefault();
-                            const rating = parseInt(document.getElementById('rating').value);
-                            const comment = document.getElementById('comment').value;
-
-                            if (isNaN(rating) || rating < 1 || rating > 5) {
-                                showMessage('Rating must be between 1 and 5.', 'error');
-                                return;
-                            }
-
-                            try {
-                                await fetchAPI('/reviews', 'POST', {
-                                    order_id: selectedOrder.id,
-                                    reviewer_id: currentUser.user_id,
-                                    rating,
-                                    comment
-                                });
-                                showMessage('Review submitted successfully!', 'success');
-                                await loadReviews(); // Reload reviews to show the new one and hide form
-                            } catch (error) {
-                                // Error handled by fetchAPI
-                            }
-                        };
-                    } else {
-                        reviewFormContainer.innerHTML = ''; // Hide form if already reviewed or not buyer/completed
-                    }
-
-                } catch (error) {
-                    reviewsDisplay.innerHTML = '<div class="text-center text-red-600 py-4">Failed to load reviews.</div>';
+                // Fetch gig title
+                const gigResponse = await fetch(`${API_BASE_URL}/gigs/${order.gig_id}`);
+                if (gigResponse.ok) {
+                    const gigData = await gigResponse.json();
+                    setGigTitle(gigData.title);
+                } else {
+                    setGigTitle('Unknown Gig');
+                    console.error(`Failed to fetch gig ${order.gig_id}: ${gigResponse.status}`);
                 }
-            }
 
-            loadReviews(); // Initial load for reviews
+                // Fetch reviews for this order
+                const reviewsResponse = await fetch(`${API_BASE_URL}/reviews?order_id=${order.id}`);
+                if (!reviewsResponse.ok) {
+                    throw new Error(`HTTP error! status: ${reviewsResponse.status}`);
+                }
+                const fetchedReviews = await reviewsResponse.json();
+                setReviews(fetchedReviews);
+
+                // Check if current user (buyer) has reviewed this order
+                if (user?.user_type === 'buyer' && fetchedReviews.some(r => r.reviewer_id === userId)) {
+                    setHasReviewed(true);
+                } else {
+                    setHasReviewed(false);
+                }
+
+            } catch (err) {
+                console.error("Error fetching review data:", err);
+                setError(`Failed to load reviews: ${err.message}. Make sure your backend is running.`);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchReviewData();
+    }, [API_BASE_URL, order, userId, user]);
+
+    const handleSubmitReview = async (e) => {
+        e.preventDefault();
+        setMessage('');
+
+        if (!order || !userId || user?.user_type !== 'buyer') {
+            setMessage('You must be a buyer and select an order to leave a review.');
+            return;
+        }
+        if (hasReviewed) {
+            setMessage('You have already reviewed this order.');
+            return;
         }
 
-        // --- Initial Load ---
-        window.onload = () => {
-            const storedUser = localStorage.getItem('currentUser');
-            if (storedUser) {
-                try {
-                    currentUser = JSON.parse(storedUser);
-                    currentView = 'dashboard'; // Go to dashboard if user found
-                } catch (e) {
-                    console.error("Failed to parse stored user data:", e);
-                    localStorage.removeItem('currentUser');
-                }
+        setLoading(true); // Show loading while submitting
+        try {
+            const response = await fetch(`${API_BASE_URL}/reviews`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: order.id,
+                    reviewer_id: userId,
+                    rating: parseInt(rating),
+                    comment,
+                }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                // Add the new review to the local state for immediate display
+                const tempReview = {
+                    id: result.review_id || `temp_rev_${Date.now()}`,
+                    order_id: order.id,
+                    reviewer_id: userId,
+                    rating: parseInt(rating),
+                    comment,
+                    review_date: new Date().toISOString().split('T')[0],
+                };
+                setReviews(prevReviews => [...prevReviews, tempReview]);
+                setMessage('Review submitted successfully!');
+                setComment('');
+                setRating(5);
+                setHasReviewed(true); // Mark as reviewed
+            } else {
+                setMessage(`Error submitting review: ${result.message || response.statusText}`);
             }
-            render(); // Initial render based on currentView
-        };
+        } catch (error) {
+            console.error("Error submitting review:", error);
+            setMessage(`Network error or API not reachable: ${error.message}. Make sure your backend is running.`);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    </script>
-</body>
-</html>
+    if (loading) return <div className="text-center text-gray-600">Loading reviews...</div>;
+    if (error) return <div className="text-center text-red-600">{error}</div>;
+    if (!order) return <div className="text-center text-gray-600">No order selected for reviews.</div>;
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
+            <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6">
+                Reviews for Order: {gigTitle || order.gig_id}
+            </h2>
+
+            {user?.user_type === 'buyer' && !hasReviewed && order.status === 'completed' && (
+                <div className="mb-8 p-6 border border-gray-200 rounded-lg bg-blue-50">
+                    <h3 className="text-xl font-semibold text-blue-700 mb-4">Leave a Review</h3>
+                    <form onSubmit={handleSubmitReview} className="space-y-4">
+                        <div>
+                            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="rating">
+                                Rating (1-5)
+                            </label>
+                            <input
+                                type="number"
+                                id="rating"
+                                min="1"
+                                max="5"
+                                value={rating}
+                                onChange={(e) => setRating(e.target.value)}
+                                className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="comment">
+                                Comment
+                            </label>
+                            <textarea
+                                id="comment"
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+                            ></textarea>
+                        </div>
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                            disabled={loading}
+                        >
+                            {loading ? 'Submitting...' : 'Submit Review'}
+                        </button>
+                    </form>
+                    {message && (
+                        <p className="mt-4 text-center text-sm font-semibold text-red-600">{message}</p>
+                    )}
+                </div>
+            )}
+
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">All Reviews for this Order</h3>
+            {reviews.length === 0 ? (
+                <div className="text-center text-gray-500 italic">No reviews yet for this order.</div>
+            ) : (
+                <div className="space-y-4">
+                    {reviews.map((review) => (
+                        <div key={review.id} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200">
+                            <div className="flex items-center mb-2">
+                                <span className="font-bold text-lg text-indigo-600">{review.rating} / 5 Stars</span>
+                            </div>
+                            <p className="text-gray-700 text-sm">{review.comment}</p>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Reviewed on: {review.review_date}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default App;
